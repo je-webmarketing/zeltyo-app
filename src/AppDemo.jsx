@@ -1,7 +1,8 @@
-import React, { useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+
 
 export default function App() {
-  const [businessName, setBusinessName] = useState("Mon Commerce");
+  const [businessName, setBusinessName] = useState("Le Café du Centre");
   const [rewardGoal, setRewardGoal] = useState(10);
   const [rewardLabel, setRewardLabel] = useState("1 boisson offerte");
   const [primaryColor, setPrimaryColor] = useState("#0f766e");
@@ -10,16 +11,17 @@ export default function App() {
   const [activeTab, setActiveTab] = useState("dashboard");
   const [notification, setNotification] = useState("");
 
- const [currentUser, setCurrentUser] = useState({
-  name: "Sophie Admin",
-  role: "Administrateur",
+const [currentUser, setCurrentUser] = useState({
+  name: "Claire Gérante",
+  role: "admin",
+  email: "admin@cafeducentre.fr",
 });
 
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [loginForm, setLoginForm] = useState({
-    email: "admin@moncommerce.ch",
-    password: "admin123",
-  });
+const [loginForm, setLoginForm] = useState({
+  email: "admin@cafeducentre.fr",
+  password: "admin123",
+});
 
   const [newCustomer, setNewCustomer] = useState({
     name: "",
@@ -71,57 +73,59 @@ export default function App() {
   ]);
 
   const [promotions, setPromotions] = useState([
-    {
-      id: 1,
-      title: "Offre fidélité printemps",
-      code: "PRINTEMPS10",
-      description: "10% de remise pour les clients fidèles sur présentation de leur carte.",
-      channel: "Instagram",
-      status: "Active",
-      createdBy: "Sophie Admin",
-      createdAt: "29/03/2026 09:15",
-    },
-    {
-      id: 2,
-      title: "Récompense boisson offerte",
-      code: "CAFE10",
-      description: "Une boisson offerte après 10 points cumulés.",
-      channel: "En boutique",
-      status: "Active",
-      createdBy: "Sophie Admin",
-      createdAt: "28/03/2026 16:40",
-    },
-  ]);
+  {
+    id: 1,
+    title: "Café offert après 10 passages",
+    code: "CAFE10",
+    description:
+      "Après 10 passages enregistrés, le client reçoit 1 boisson offerte. Offre simple à expliquer en caisse et facile à relancer par WhatsApp.",
+    channel: "En boutique",
+    status: "Active",
+    createdBy: "Claire Gérante",
+    createdAt: "29/03/2026 09:15",
+  },
+  {
+    id: 2,
+    title: "Formule petit-déjeuner -10%",
+    code: "MATIN10",
+    description:
+      "Relance matinale réservée aux clients fidèles sur présentation de leur carte digitale Zeltyo.",
+    channel: "WhatsApp",
+    status: "Active",
+    createdBy: "Claire Gérante",
+    createdAt: "28/03/2026 16:40",
+  },
+]);
 
-  const [employees, setEmployees] = useState([
-    {
-      id: "EMP-1",
-      name: "Sophie Admin",
-      role: "admin",
-      status: "Actif",
-      lastAction: "Création promotion",
-      email: "admin@moncommerce.ch",
-      password: "admin123",
-    },
-    {
-      id: "EMP-2",
-      name: "Nadia Employée",
-      role: "employee",
-      status: "Actif",
-      lastAction: "Validation visite client",
-      email: "nadia@moncommerce.ch",
-      password: "employe123",
-    },
-    {
-      id: "EMP-3",
-      name: "Lucas Employé",
-      role: "employee",
-      status: "Actif",
-      lastAction: "Ajout client",
-      email: "lucas@moncommerce.ch",
-      password: "employe123",
-    },
-  ]);
+const [employees, setEmployees] = useState([
+  {
+    id: "EMP-1",
+    name: "Claire Gérante",
+    role: "admin",
+    status: "Actif",
+    lastAction: "Création promotion",
+    email: "admin@cafeducentre.fr",
+    password: "admin123",
+  },
+  {
+    id: "EMP-2",
+    name: "Nadia Serveuse",
+    role: "employee",
+    status: "Actif",
+    lastAction: "Validation visite client",
+    email: "nadia@cafeducentre.fr",
+    password: "employe123",
+  },
+  {
+    id: "EMP-3",
+    name: "Lucas Barista",
+    role: "employee",
+    status: "Actif",
+    lastAction: "Ajout client",
+    email: "lucas@cafeducentre.fr",
+    password: "employe123",
+  },
+]);
 
   const [activityLog, setActivityLog] = useState([
     {
@@ -398,7 +402,14 @@ export default function App() {
       return `Bonjour ${customer.name} 👋\n\n🎉 Bonne nouvelle !\n\nVous avez ${customer.rewardsAvailable} récompense(s) disponible(s) :\n👉 ${rewardLabel}\n\nPassez en profiter dès aujourd’hui !`;
     }
 
-    return `Bonjour ${customer.name} 👋\n\nVous avez actuellement ${customer.points} point(s).\n\nEncore ${remaining} point(s) avant votre récompense :\n🎁 ${rewardLabel}\n\nÀ très vite chez ${businessName} !`;
+    return `Bonjour ${customer.name} 👋
+
+🎁 Bonne nouvelle !
+
+Il vous reste seulement ${remaining} passage(s) avant votre récompense :
+👉 ${rewardLabel}
+
+Passez aujourd’hui en profiter chez ${businessName} 😊`;
   }
 
   function openWhatsApp(customer) {
@@ -507,8 +518,8 @@ export default function App() {
                 lineHeight: 1.9,
               }}
             >
-              <div><strong>Démo administrateur</strong> : admin@moncommerce.ch / admin123</div>
-              <div><strong>Démo employé</strong> : nadia@moncommerce.ch / employe123</div>
+              <div><strong>Démo administrateur</strong> : admin@cafeducentre.fr / admin123</div>
+<div><strong>Démo employé</strong> : nadia@cafeducentre.fr / employe123</div>
             </div>
           </div>
 
@@ -551,6 +562,21 @@ export default function App() {
     <div style={{ fontSize: "13px", color: "#64748b" }}>
       Fidélisez vos clients automatiquement
     </div>
+
+    <div
+  style={{
+    background: "#000",
+    color: "#facc15",
+    padding: "6px 12px",
+    borderRadius: "999px",
+    fontWeight: "800",
+    fontSize: "12px",
+    display: "inline-block",
+    marginTop: "8px",
+  }}
+>
+  + fidélisation automatique
+</div>
 
     <div style={{
       display: "inline-block",
@@ -1090,35 +1116,67 @@ height: "60px",
         </div>
 
         <div style={styles.hero}>
-          <div style={styles.heroBadge}>Application autonome</div>
-          <h2 style={styles.heroTitle}>{businessName}</h2>
-          <p style={styles.heroText}>
-            Le commerce peut gérer lui-même ses clients, ses récompenses et ses promotions. L’administrateur garde une vue complète sur les actions réalisées par les employés pour vérifier la bonne exécution au quotidien.
-          </p>
+        <div style={styles.heroBadge}>Démo commerciale Zeltyo</div>
+<h2 style={styles.heroTitle}>{businessName}</h2>
+<p style={styles.heroText}>
+  Faites revenir vos clients sans effort.
+  Identifiez qui relancer, envoyez un message en 1 clic et augmentez la fréquence de visite.
+</p>
         </div>
 
         {notification && <div style={styles.notif}>{notification}</div>}
 
         <div style={styles.nav}>
           <button style={styles.navBtn(activeTab === "dashboard")} onClick={() => setActiveTab("dashboard")}>
-            Tableau de bord
+            📊 Pilotage simple
           </button>
           <button style={styles.navBtn(activeTab === "clients")} onClick={() => setActiveTab("clients")}>
-            Clients
+            👥 Vos clients
           </button>
           <button style={styles.navBtn(activeTab === "promos")} onClick={() => setActiveTab("promos")}>
-            Promotions
+            🎁 Offres & fidélité
           </button>
           <button style={styles.navBtn(activeTab === "team")} onClick={() => setActiveTab("team")}>
-            Équipe & contrôle
+            👔 Gestion équipe
           </button>
           <button style={styles.navBtn(activeTab === "settings")} onClick={() => setActiveTab("settings")}>
-            Paramètres
+            ⚙️ Réglages
           </button>
         </div>
 
         {activeTab === "dashboard" && (
           <>
+<div
+  style={{
+    background: "#111827",
+    color: "white",
+    padding: "16px",
+    borderRadius: "16px",
+    marginBottom: "20px",
+    textAlign: "center",
+    fontWeight: "bold",
+  }}
+>
+  🎯 Aujourd’hui : 4 clients à relancer • 2 récompenses à utiliser
+</div>
+
+<button
+  style={{
+    width: "100%",
+    background: "#25D366",
+    color: "white",
+    padding: "16px",
+    borderRadius: "14px",
+    fontWeight: "800",
+    fontSize: "16px",
+    marginBottom: "20px",
+    border: "none",
+    cursor: "pointer",
+  }}
+>
+  🚀 Relancer mes clients en 1 clic
+</button>
+
             <div style={styles.grid5}>
               <StatCard label="Clients actifs" value={totalClients} />
               <StatCard label="Points cumulés" value={totalPoints} />
@@ -1189,7 +1247,22 @@ height: "60px",
                       <div>Dernière visite : <strong>{customer.lastVisit}</strong></div>
                     </div>
                   </div>
-                ))}
+                  ))}
+                  <div
+  style={{
+    background: "#ecfdf5",
+    padding: "16px",
+    borderRadius: "14px",
+    marginTop: "10px",
+    color: "#065f46",
+    lineHeight: 1.8,
+    fontWeight: "600",
+  }}
+>
+  ✅ 27 visites enregistrées cette semaine<br />
+  ✅ 6 clients relancés automatiquement<br />
+  ✅ 2 récompenses utilisées
+</div>
               </div>
 
               <div style={styles.card}>

@@ -1,10 +1,12 @@
-import { StrictMode } from 'react'
-import { createRoot } from 'react-dom/client'
-import './index.css'
-import App from './App.jsx'
+import React from "react";
+import ReactDOM from "react-dom/client";
+import AppLive from "./AppLive.jsx";
+import AppDemo from "./AppDemo.jsx";
 
-createRoot(document.getElementById('root')).render(
-  <StrictMode>
-    <App />
-  </StrictMode>,
-)
+const mode = "demo"; // mets "live" pour la version opérationnelle
+
+ReactDOM.createRoot(document.getElementById("root")).render(
+  <React.StrictMode>
+    {mode === "demo" ? <AppDemo /> : <AppLive />}
+  </React.StrictMode>
+);
