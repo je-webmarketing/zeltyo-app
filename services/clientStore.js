@@ -1,33 +1,37 @@
-import fs from "fs/promises";
-import path from "path";
+import { db } from "./firebaseAdmin.js";
 
-const dataPath = path.resolve("data", "clients.json");
-
-async function ensureFile() {
-  try {
-    await fs.access(dataPath);
-  } catch {
-    await fs.mkdir(path.dirname(dataPath), { recursive: true });
-    await fs.writeFile(dataPath, "[]", "utf-8");
-  }
-}
+const clientsCollection = db.collection("clients");
 
 export async function getAllClients() {
-  await ensureFile();
-  const raw = await fs.readFile(dataPath, "utf-8");
-  return JSON.parse(raw || "[]");
+  const snapshot = await clientsCollection.get();
+  return snapshot.docs.map((doc) => ({
+    ...doc.data(),
+  }));
 }
 
 export async function saveAllClients(clients) {
-  await ensureFile();
-  await fs.writeFile(dataPath, JSON.stringify(clients, null, 2), "utf-8");
+  const batch = db.batch();
+
+  for (const client of clients) {
+    const docId = client.id || client.phone;
+    if (!docId) continue;
+
+    const ref = clientsCollection.doc(docId);
+    batch.set(ref, {
+      ...client,
+      id: client.id || docId,
+      updatedAt: new Date().toISOString(),
+    });
+  }
+
+  await batch.commit();
   return clients;
 }
 
 export async function upsertClient(clientData) {
   const clients = await getAllClients();
 
-  const index = clients.findIndex(
+  const existing = clients.find(
     (c) =>
       c.id === clientData.id ||
       (clientData.phone && c.phone === clientData.phone) ||
@@ -36,15 +40,19 @@ export async function upsertClient(clientData) {
 
   const now = new Date().toISOString();
 
-  if (index !== -1) {
-    clients[index] = {
-      ...clients[index],
+  let client;
+
+  if (existing) {
+    client = {
+      ...existing,
       ...clientData,
       updatedAt: now,
     };
   } else {
-    clients.push({
-      id: clientData.id || crypto.randomUUID(),
+    const newId = clientData.id || clientData.phone || crypto.randomUUID();
+
+    client = {
+      id: newId,
       name: clientData.name || "",
       phone: clientData.phone || "",
       subscriptionId: clientData.subscriptionId || "",
@@ -57,11 +65,12 @@ export async function upsertClient(clientData) {
       createdAt: now,
       updatedAt: now,
       segment: "nouveau",
-    });
+    };
   }
 
-  await saveAllClients(clients);
-  return clients;
+  await clientsCollection.doc(client.id).set(client, { merge: true });
+
+  return await getAllClients();
 }
 
 function getSegment(client) {
