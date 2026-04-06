@@ -18,24 +18,36 @@ dotenv.config();
 const app = express();
 const port = process.env.PORT || 3001;
 
-console.log("✅ ZELTYO BACKEND V2 chargé");
+console.log("✅ ZELTYO BACKEND CORS FIX");
 
 const allowedOrigins = [
   "http://localhost:5173",
+  "http://127.0.0.1:5173",
   "http://localhost:5174",
+  "http://127.0.0.1:5174",
+  "https://zeltyo.netlify.app",
+  "https://zeltyo-clients.netlify.app",
+  "https://zeltyo-merchant.netlify.app",
   process.env.CLIENT_APP_URL,
   process.env.MERCHANT_APP_URL,
 ].filter(Boolean);
 
-app.use(
-  cors({
-    origin: [
-      "http://localhost:5173",
-      "https://zeltyo.netlify.app"
-    ],
-    credentials: true,
-  })
-);
+const corsOptions = {
+  origin: (origin, callback) => {
+    console.log("🌍 Origin:", origin);
+
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+
+    return callback(new Error(`CORS blocked: ${origin}`));
+  },
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+  credentials: true,
+};
+
+app.use(cors(corsOptions));
+app.options("*", cors(corsOptions));
 
 app.use(express.json());
 
@@ -43,20 +55,24 @@ app.get("/health", (req, res) => {
   res.json({
     ok: true,
     service: "zeltyo-backend",
-    version: "V2_SEGMENTS",
+    version: "CORS_FIX_01",
   });
 });
-
-app.use("/auth", authRoutes);
-app.use("/notifications-advanced", notificationsAdvanced);
 
 app.get("/", (req, res) => {
   res.json({
     ok: true,
     message: "Zeltyo backend OK",
-    version: "V2_SEGMENTS",
+    version: "CORS_FIX_01",
   });
 });
+
+app.use("/auth", authRoutes);
+app.use("/notifications-advanced", notificationsAdvanced);
+app.use("/notifications", notificationsRouter);
+app.use("/automation", automationRoutes);
+app.use("/clients", clientsRouter);
+app.use("/automation-segmented", automationSegmentedRouter);
 
 app.get("/test-push", async (req, res) => {
   try {
@@ -79,11 +95,6 @@ app.get("/test-push", async (req, res) => {
   }
 });
 
-app.use("/notifications", notificationsRouter);
-app.use("/automation", automationRoutes);
-app.use("/clients", clientsRouter);
-app.use("/automation-segmented", automationSegmentedRouter);
-
 cron.schedule("0 10 * * *", async () => {
   console.log("⏰ Lancement automatique daily 10h");
 
@@ -99,6 +110,22 @@ cron.schedule("0 10 * * *", async () => {
   } catch (error) {
     console.error("❌ Erreur cron daily :", error);
   }
+});
+
+app.use((err, req, res, next) => {
+  console.error("❌ Erreur serveur :", err.message);
+
+  if (err.message?.includes("CORS")) {
+    return res.status(403).json({
+      ok: false,
+      error: err.message,
+    });
+  }
+
+  return res.status(500).json({
+    ok: false,
+    error: "Erreur interne serveur",
+  });
 });
 
 app.listen(port, () => {
