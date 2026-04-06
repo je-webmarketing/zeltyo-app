@@ -129,7 +129,7 @@ export default function ClientApp() {
 
   const saveClientSubscription = async (subscriptionId) => {
   try {
-    const response = await fetch("http://localhost:3001/clients/register-subscription", {
+    const response = await fetch("https://zeltyo-app.onrender.com/clients/register-subscription", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

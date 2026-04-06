@@ -33,7 +33,7 @@ export function initOneSignal() {
     const OneSignal = await waitForOneSignal();
 
     await OneSignal.init({
-      appId: "d53fc54d-877a-4f73-ab3e-aaaab42b186b",
+      appId: "06b906e6-43ea-48bc-b430-6444533fb910",
       notifyButton: {
         enable: false,
       },

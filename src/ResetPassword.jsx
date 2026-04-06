@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 
-const API_BASE = "http://localhost:3001";
+const API_BASE = "http://zeltyo-app.onrender.com";
 
 const COLORS = {
   bg: "#050505",
