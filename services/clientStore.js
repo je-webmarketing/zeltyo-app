@@ -5,7 +5,9 @@ const clientsCollection = db.collection("clients");
 const FALLBACK_CLIENTS = [
   {
     id: "client-1",
+    loyaltyId: "CL-1001",
     name: "Client Test",
+    email: "client@test.com",
     phone: "0600000000",
     subscriptionId: "a67b1b72-bc4c-431b-a3b8-9bf9d79d3079",
     points: 5,
@@ -52,10 +54,12 @@ async function getAllClientsFromFirestore() {
 export async function getAllClients() {
   try {
     const clients = await getAllClientsFromFirestore();
+
     if (!clients.length) {
       console.warn("Firestore vide, fallback clients utilisé.");
       return FALLBACK_CLIENTS;
     }
+
     return clients;
   } catch (error) {
     console.error("getAllClients Firestore error:", error?.message || error);
@@ -73,11 +77,14 @@ export async function saveAllClients(clients) {
       if (!docId) continue;
 
       const ref = clientsCollection.doc(docId);
+
       batch.set(
         ref,
         {
           ...client,
           id: client.id || docId,
+          loyaltyId: client.loyaltyId || client.id || docId,
+          email: client.email || "",
           updatedAt: new Date().toISOString(),
         },
         { merge: true }
@@ -95,16 +102,23 @@ export async function saveAllClients(clients) {
 
 export async function upsertClient(clientData) {
   const clients = await getAllClients();
+  const now = new Date().toISOString();
 
-  const existing = clients.find(
-    (c) =>
-      c.id === clientData.id ||
-      (clientData.phone && c.phone === clientData.phone) ||
+  const normalizedPhone = String(clientData.phone || "").trim();
+  const normalizedEmail = String(clientData.email || "").trim().toLowerCase();
+
+  const existing = clients.find((c) => {
+    const cPhone = String(c.phone || "").trim();
+    const cEmail = String(c.email || "").trim().toLowerCase();
+
+    return (
+      (clientData.id && c.id === clientData.id) ||
+      (normalizedPhone && cPhone === normalizedPhone) ||
+      (normalizedEmail && cEmail === normalizedEmail) ||
       (clientData.subscriptionId &&
         c.subscriptionId === clientData.subscriptionId)
-  );
-
-  const now = new Date().toISOString();
+    );
+  });
 
   let client;
 
@@ -112,18 +126,26 @@ export async function upsertClient(clientData) {
     client = {
       ...existing,
       ...clientData,
+      phone: normalizedPhone || existing.phone || "",
+      email: normalizedEmail || existing.email || "",
+      loyaltyId: clientData.loyaltyId ?? existing.loyaltyId ?? existing.id,
       updatedAt: now,
     };
   } else {
     const newId =
       clientData.id ||
-      clientData.phone ||
+      normalizedPhone ||
       `client-${Math.random().toString(36).slice(2, 10)}`;
+
+    const newLoyaltyId =
+      clientData.loyaltyId || `CL-${Math.random().toString(36).slice(2, 10)}`;
 
     client = {
       id: newId,
-      name: clientData.name || "",
-      phone: clientData.phone || "",
+      loyaltyId: newLoyaltyId,
+      name: String(clientData.name || "").trim(),
+      email: normalizedEmail,
+      phone: normalizedPhone,
       subscriptionId: clientData.subscriptionId || "",
       points: Number(clientData.points || 0),
       rewardGoal: Number(clientData.rewardGoal || 10),
@@ -131,7 +153,7 @@ export async function upsertClient(clientData) {
       totalSpent: Number(clientData.totalSpent || 0),
       lastVisitAt: clientData.lastVisitAt || null,
       rewardNotified: false,
-      createdAt: now,
+      createdAt: clientData.createdAt || now,
       updatedAt: now,
       segment: "nouveau",
     };
@@ -139,10 +161,10 @@ export async function upsertClient(clientData) {
 
   try {
     await clientsCollection.doc(client.id).set(client, { merge: true });
-    return await getAllClients();
+    return client;
   } catch (error) {
     console.error("upsertClient Firestore error:", error?.message || error);
-    return [...clients.filter((c) => c.id !== client.id), client];
+    return client;
   }
 }
 

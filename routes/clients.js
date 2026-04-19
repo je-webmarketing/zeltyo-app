@@ -96,7 +96,7 @@ router.post("/", async (req, res) => {
       );
     });
 
-    const savedClient = await upsertClient({
+    await upsertClient({
       id: existingClient?.id || id || crypto.randomUUID(),
       loyaltyId: existingClient?.loyaltyId || loyaltyId || `CL-${Date.now()}`,
       name,
@@ -106,19 +106,24 @@ router.post("/", async (req, res) => {
       updatedAt: new Date().toISOString(),
     });
 
+    const clientsAfter = await getAllClients();
+
+    const savedClient = clientsAfter.find((c) => {
+      const cPhone = String(c.phone || "").trim();
+      const cEmail = String(c.email || "").trim().toLowerCase();
+
+      return (
+        (existingClient?.id && c.id === existingClient.id) ||
+        (normalizedPhone && cPhone === normalizedPhone) ||
+        (normalizedEmail && cEmail === normalizedEmail)
+      );
+    });
+
     return res.status(existingClient ? 200 : 201).json({
       ok: true,
       created: !existingClient,
-      message: existingClient
-        ? "Client existant mis à jour"
-        : "Client créé",
-      client: {
-        id: savedClient.id,
-        loyaltyId: savedClient.loyaltyId,
-        name: savedClient.name,
-        email: savedClient.email,
-        phone: savedClient.phone,
-      },
+      message: existingClient ? "Client déjà existant, fiche mise à jour" : "Client créé",
+      client: savedClient || null,
     });
   } catch (error) {
     console.error("Erreur POST /clients :", error);
