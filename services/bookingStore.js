@@ -36,25 +36,25 @@ export async function createBooking(bookingData) {
 }
 
 export async function getBookingsByBusinessId(businessId) {
-  const snapshot = await bookingsCollection
-    .where("businessId", "==", businessId)
-    .get();
+  const snapshot = await bookingsCollection.get();
 
-  return snapshot.docs.map((doc) => ({
-    id: doc.id,
-    ...doc.data(),
-  }));
+  return snapshot.docs
+    .map((doc) => ({
+      id: doc.id,
+      ...doc.data(),
+    }))
+    .filter((booking) => booking.businessId === businessId);
 }
 
 export async function getBookingsByClientId(clientId) {
-  const snapshot = await bookingsCollection
-    .where("clientId", "==", clientId)
-    .get();
+  const snapshot = await bookingsCollection.get();
 
-  return snapshot.docs.map((doc) => ({
-    id: doc.id,
-    ...doc.data(),
-  }));
+  return snapshot.docs
+    .map((doc) => ({
+      id: doc.id,
+      ...doc.data(),
+    }))
+    .filter((booking) => booking.clientId === clientId);
 }
 
 export async function updateBookingStatus(id, status) {
