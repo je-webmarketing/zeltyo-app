@@ -75,7 +75,11 @@ router.post("/", async (req, res) => {
 
 router.get("/by-business/:id", async (req, res) => {
   try {
-    const bookings = await getBookingsByBusinessId(req.params.id);
+    const { id } = req.params;
+
+    console.log("👉 businessId reçu :", id);
+
+    const bookings = await getBookingsByBusinessId(id);
 
     return res.json({
       ok: true,
@@ -85,7 +89,7 @@ router.get("/by-business/:id", async (req, res) => {
     console.error("Erreur GET /bookings/by-business/:id :", error);
     return res.status(500).json({
       ok: false,
-      error: "Erreur récupération réservations commerce",
+      error: error.message,
     });
   }
 });
