@@ -12,12 +12,30 @@ import automationSegmentedRouter, {
 import { sendPush } from "./services/onesignal.js";
 import notificationsAdvanced from "./routes/notificationsAdvanced.js";
 import authRoutes from "./routes/auth.js";
+import bookingsRouter from "./routes/bookings.js";
 
 dotenv.config();
 
 const app = express();
 const port = process.env.PORT || 3001;
 
+app.use(cors({
+  origin: [
+    "http://localhost:5173",
+    "https://zeltyo.netlify.app"
+  ],
+  credentials: true,
+}));
+
+app.use(express.json());
+
+app.use("/auth", authRoutes);
+app.use("/notifications-advanced", notificationsAdvanced);
+app.use("/notifications", notificationsRouter);
+app.use("/automation", automationRoutes);
+app.use("/clients", clientsRouter);
+app.use("/bookings", bookingsRouter);
+app.use("/automation-segmented", automationSegmentedRouter);
 console.log("✅ ZELTYO BACKEND CORS FIX");
 
 const allowedOrigins = [
