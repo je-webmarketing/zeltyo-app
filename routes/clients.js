@@ -6,6 +6,7 @@ import {
   saveAllClients,
 } from "../services/clientStore.js";
 import { sendNotificationToSubscription } from "../services/onesignal.js";
+import crypto from "crypto";
 
 const router = express.Router();
 
@@ -28,8 +29,104 @@ router.get("/__debug", async (req, res) => {
   return res.json({
     ok: true,
     message: "clients router OK",
-    routes: ["/", "/register-subscription", "/segments", "/visit"],
+    routes: [
+      "/",
+      "/by-loyalty/:value",
+      "/register-subscription",
+      "/segments",
+      "/visit",
+      "/relaunch",
+    ],
   });
+});
+
+router.get("/by-loyalty/:value", async (req, res) => {
+  try {
+    const { value } = req.params;
+    const clients = await getAllClients();
+
+    const client = clients.find(
+      (c) => c.loyaltyId === value || c.id === value
+    );
+
+    if (!client) {
+      return res.status(404).json({
+        ok: false,
+        error: "Client introuvable",
+      });
+    }
+
+    return res.json({
+      ok: true,
+      client,
+    });
+  } catch (error) {
+    console.error("Erreur GET /clients/by-loyalty/:value :", error);
+    return res.status(500).json({
+      ok: false,
+      error: "Erreur récupération client",
+    });
+  }
+});
+
+router.post("/", async (req, res) => {
+  try {
+    const { id, loyaltyId, name, email, phone } = req.body;
+
+    if (!name || (!phone && !email)) {
+      return res.status(400).json({
+        ok: false,
+        error: "name + phone ou email obligatoire",
+      });
+    }
+
+    const clientsBefore = await getAllClients();
+
+    const normalizedPhone = String(phone || "").trim();
+    const normalizedEmail = String(email || "").trim().toLowerCase();
+
+    const existingClient = clientsBefore.find((c) => {
+      const cPhone = String(c.phone || "").trim();
+      const cEmail = String(c.email || "").trim().toLowerCase();
+
+      return (
+        (id && c.id === id) ||
+        (normalizedPhone && cPhone === normalizedPhone) ||
+        (normalizedEmail && cEmail === normalizedEmail)
+      );
+    });
+
+    const savedClient = await upsertClient({
+      id: existingClient?.id || id || crypto.randomUUID(),
+      loyaltyId: existingClient?.loyaltyId || loyaltyId || `CL-${Date.now()}`,
+      name,
+      email: normalizedEmail,
+      phone: normalizedPhone,
+      createdAt: existingClient?.createdAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+
+    return res.status(existingClient ? 200 : 201).json({
+      ok: true,
+      created: !existingClient,
+      message: existingClient
+        ? "Client existant mis à jour"
+        : "Client créé",
+      client: {
+        id: savedClient.id,
+        loyaltyId: savedClient.loyaltyId,
+        name: savedClient.name,
+        email: savedClient.email,
+        phone: savedClient.phone,
+      },
+    });
+  } catch (error) {
+    console.error("Erreur POST /clients :", error);
+    return res.status(500).json({
+      ok: false,
+      error: "Erreur création client",
+    });
+  }
 });
 
 router.post("/register-subscription", async (req, res) => {
