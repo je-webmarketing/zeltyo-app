@@ -1,5 +1,12 @@
 let oneSignalReadyPromise = null;
 
+function isLocalhost() {
+  return (
+    window.location.hostname === "localhost" ||
+    window.location.hostname === "127.0.0.1"
+  );
+}
+
 function waitForOneSignal(maxAttempts = 100, interval = 100) {
   return new Promise((resolve, reject) => {
     let attempts = 0;
@@ -25,6 +32,14 @@ function waitForOneSignal(maxAttempts = 100, interval = 100) {
 }
 
 export function initOneSignal() {
+  if (isLocalhost()) {
+    return Promise.reject(
+      new Error(
+        "OneSignal désactivé en localhost. Testez cette fonction sur Netlify ou autorisez localhost dans OneSignal."
+      )
+    );
+  }
+
   if (oneSignalReadyPromise) {
     return oneSignalReadyPromise;
   }
@@ -39,6 +54,7 @@ export function initOneSignal() {
       },
       serviceWorkerPath: "/OneSignalSDKWorker.js",
       serviceWorkerUpdaterPath: "/OneSignalSDKUpdaterWorker.js",
+      allowLocalhostAsSecureOrigin: true,
     });
 
     console.log("OneSignal initialisé ✅");
