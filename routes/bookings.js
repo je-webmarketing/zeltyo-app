@@ -10,6 +10,8 @@ console.log("✅ routes/bookings.js chargé");
 
 const router = express.Router();
 
+const ALLOWED_STATUSES = ["pending", "confirmed", "cancelled"];
+
 router.get("/__debug", async (req, res) => {
   return res.json({
     ok: true,
@@ -18,7 +20,7 @@ router.get("/__debug", async (req, res) => {
       "/",
       "/by-business/:id",
       "/by-client/:id",
-      "/:id/status"
+      "/:id/status",
     ],
   });
 });
@@ -47,7 +49,7 @@ router.post("/", async (req, res) => {
 
     const booking = await createBooking({
       businessId,
-      clientId,
+      clientId: clientId || "",
       clientName,
       clientPhone,
       type: type || "reservation",
@@ -89,7 +91,7 @@ router.get("/by-business/:id", async (req, res) => {
     console.error("Erreur GET /bookings/by-business/:id :", error);
     return res.status(500).json({
       ok: false,
-      error: error.message,
+      error: error.message || "Erreur récupération réservations commerce",
     });
   }
 });
@@ -119,6 +121,13 @@ router.patch("/:id/status", async (req, res) => {
       return res.status(400).json({
         ok: false,
         error: "status obligatoire",
+      });
+    }
+
+    if (!ALLOWED_STATUSES.includes(status)) {
+      return res.status(400).json({
+        ok: false,
+        error: "status invalide (pending, confirmed, cancelled)",
       });
     }
 

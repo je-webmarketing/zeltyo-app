@@ -19,13 +19,17 @@ dotenv.config();
 const app = express();
 const port = process.env.PORT || 3001;
 
-app.use(cors({
-  origin: [
-    "http://localhost:5173",
-    "https://zeltyo.netlify.app"
-  ],
-  credentials: true,
-}));
+app.use(
+  cors({
+    origin: [
+      "http://localhost:5173",
+      "http://localhost:5174",
+      "https://zeltyo-clients.netlify.app",
+      "https://zeltyo-commercant.netlify.app",
+    ],
+    credentials: true,
+  })
+);
 
 app.use(express.json());
 
