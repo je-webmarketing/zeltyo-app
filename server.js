@@ -50,19 +50,33 @@ const allowedOrigins = [
   process.env.MERCHANT_APP_URL,
 ].filter(Boolean);
 
-const corsOptions = {
-  origin: (origin, callback) => {
-    console.log("🌍 Origin:", origin);
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  console.log("🌍 Origin:", origin);
 
+  if (!origin || allowedOrigins.includes(origin)) {
+    res.header("Access-Control-Allow-Origin", origin || "*");
+    res.header("Vary", "Origin");
+    res.header("Access-Control-Allow-Credentials", "true");
+    res.header("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
+    res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  }
+
+  if (req.method === "OPTIONS") {
+    return res.sendStatus(204);
+  }
+
+  next();
+});
+
+app.use(cors({
+  origin: function (origin, callback) {
     if (!origin) return callback(null, true);
     if (allowedOrigins.includes(origin)) return callback(null, true);
-
     return callback(new Error(`CORS blocked: ${origin}`));
   },
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"],
   credentials: true,
-};
+}));
 
 app.use(cors(corsOptions));
 

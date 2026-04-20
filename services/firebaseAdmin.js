@@ -16,7 +16,10 @@ function getServiceAccount() {
 }
 
 const serviceAccount = getServiceAccount();
-
+console.log("FIREBASE PROJECT ID =", serviceAccount.project_id);
+console.log("FIREBASE CLIENT EMAIL =", serviceAccount.client_email);
+console.log("FIREBASE APP INIT OK");
+console.log("FIRESTORE DB READY =", !!db);
 console.log("SERVICE ACCOUNT TYPE =", serviceAccount.type);
 console.log("SERVICE ACCOUNT PROJECT ID =", serviceAccount.project_id);
 console.log("SERVICE ACCOUNT CLIENT EMAIL =", serviceAccount.client_email);

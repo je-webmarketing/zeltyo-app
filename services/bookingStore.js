@@ -4,6 +4,7 @@ import { db } from "./firebaseAdmin.js";
 const bookingsCollection = db.collection("bookings");
 
 export async function getAllBookings() {
+  console.log("TEST Firestore bookings collection");
   const snapshot = await bookingsCollection.get();
   return snapshot.docs.map((doc) => ({
     id: doc.id,
@@ -36,9 +37,16 @@ export async function createBooking(bookingData) {
 }
 
 export async function getBookingsByBusinessId(businessId) {
-  const snapshot = await bookingsCollection.get();
+  console.log("👉 businessId reçu :", businessId);
 
-  return snapshot.docs
+  const testRef = db.collection("bookings");
+  const snapshot = await testRef.limit(1).get();
+
+  console.log("✅ Firestore bookings accessible, docs =", snapshot.size);
+
+  const allSnapshot = await testRef.get();
+
+  return allSnapshot.docs
     .map((doc) => ({
       id: doc.id,
       ...doc.data(),
