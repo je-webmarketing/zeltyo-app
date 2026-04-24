@@ -9,12 +9,16 @@ function getServiceAccount() {
   const jsonEnv = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
 
   if (!jsonEnv) {
-    console.warn("⚠️ Firebase désactivé (pas de FIREBASE_SERVICE_ACCOUNT_JSON)");
+    console.warn("⚠️ FIREBASE_SERVICE_ACCOUNT_JSON manquant");
     return null;
   }
 
-  console.log("✅ Firebase chargé depuis .env");
-  return JSON.parse(jsonEnv);
+  try {
+    return JSON.parse(jsonEnv);
+  } catch (error) {
+    console.error("❌ FIREBASE_SERVICE_ACCOUNT_JSON invalide :", error.message);
+    return null;
+  }
 }
 
 const serviceAccount = getServiceAccount();
@@ -26,9 +30,15 @@ if (serviceAccount && !admin.apps.length) {
   });
 
   db = admin.firestore();
-  console.log("🔥 Firestore connecté");
+
+  console.log("✅ Firebase chargé depuis variable Render");
+  console.log("FIREBASE PROJECT ID =", serviceAccount.project_id);
+  console.log("FIREBASE CLIENT EMAIL =", serviceAccount.client_email);
+  console.log("FIREBASE APP INIT OK");
+  console.log("FIRESTORE DB READY =", !!db);
 } else {
-  console.log("⚠️ Firestore OFF (mode local)");
+  console.warn("⚠️ Firebase désactivé");
+  console.warn("⚠️ Firestore OFF");
 }
 
 export { db };
