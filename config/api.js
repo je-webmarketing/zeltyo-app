@@ -4,5 +4,9 @@ export const API_BASE_URL =
 
 export function buildApiUrl(path) {
   const cleanPath = path.startsWith("/") ? path : `/${path}`;
-  return `${API_BASE_URL}${cleanPath}`;
+  const url = `${API_BASE_URL}${cleanPath}`;
+
+  console.log("API CALL →", url); // 👈 IMPORTANT
+
+  return url;
 }

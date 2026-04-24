@@ -13,77 +13,44 @@ import { sendPush } from "./services/onesignal.js";
 import notificationsAdvanced from "./routes/notificationsAdvanced.js";
 import authRoutes from "./routes/auth.js";
 import bookingsRouter from "./routes/bookings.js";
+import menuRouter from "./routes/menu.js";
 
 dotenv.config();
 
 const app = express();
 const port = process.env.PORT || 3001;
 
-app.use(
-  cors({
-    origin: [
-      "http://localhost:5173",
-      "http://localhost:5174",
-      "https://zeltyo-clients.netlify.app",
-      "https://zeltyo-commercant.netlify.app",
-    ],
-    credentials: true,
-  })
-);
-
-app.use(express.json());
-
-app.use("/auth", authRoutes);
-app.use("/notifications-advanced", notificationsAdvanced);
-app.use("/notifications", notificationsRouter);
-app.use("/automation", automationRoutes);
-app.use("/clients", clientsRouter);
-app.use("/bookings", bookingsRouter);
-app.use("/automation-segmented", automationSegmentedRouter);
-console.log("✅ ZELTYO BACKEND CORS FIX");
+console.log("✅ ZELTYO BACKEND CLEAN");
 
 const allowedOrigins = [
   "http://localhost:5173",
   "http://127.0.0.1:5173",
   "http://localhost:5174",
   "http://127.0.0.1:5174",
+  "http://localhost:5175",
+  "http://127.0.0.1:5175",
   "https://zeltyo.netlify.app",
   "https://zeltyo-clients.netlify.app",
   "https://zeltyo-merchant.netlify.app",
+  "https://zeltyo-commercant.netlify.app",
   process.env.CLIENT_APP_URL,
   process.env.MERCHANT_APP_URL,
 ].filter(Boolean);
 
-app.use((req, res, next) => {
-  const origin = req.headers.origin;
-  console.log("🌍 Origin:", origin);
+app.use(
+  cors({
+    origin(origin, callback) {
+      if (!origin) return callback(null, true);
 
-  if (!origin || allowedOrigins.includes(origin)) {
-    res.header("Access-Control-Allow-Origin", origin || "*");
-    res.header("Vary", "Origin");
-    res.header("Access-Control-Allow-Credentials", "true");
-    res.header("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
-    res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
-  }
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
 
-  if (req.method === "OPTIONS") {
-    return res.sendStatus(204);
-  }
-
-  next();
-});
-
-app.use(cors({
-  origin: function (origin, callback) {
-    if (!origin) return callback(null, true);
-    if (allowedOrigins.includes(origin)) return callback(null, true);
-    return callback(new Error(`CORS blocked: ${origin}`));
-  },
-  credentials: true,
-}));
-
-app.use(cors(corsOptions));
-
+      return callback(new Error(`CORS blocked: ${origin}`));
+    },
+    credentials: true,
+  })
+);
 
 app.use(express.json());
 
@@ -91,7 +58,7 @@ app.get("/health", (req, res) => {
   res.json({
     ok: true,
     service: "zeltyo-backend",
-    version: "CORS_FIX_01",
+    version: "MENU_READY_01",
   });
 });
 
@@ -99,7 +66,7 @@ app.get("/", (req, res) => {
   res.json({
     ok: true,
     message: "Zeltyo backend OK",
-    version: "CORS_FIX_01",
+    version: "MENU_READY_01",
   });
 });
 
@@ -108,6 +75,8 @@ app.use("/notifications-advanced", notificationsAdvanced);
 app.use("/notifications", notificationsRouter);
 app.use("/automation", automationRoutes);
 app.use("/clients", clientsRouter);
+app.use("/bookings", bookingsRouter);
+app.use("/menu", menuRouter);
 app.use("/automation-segmented", automationSegmentedRouter);
 
 app.get("/test-push", async (req, res) => {
@@ -118,10 +87,7 @@ app.get("/test-push", async (req, res) => {
       externalIds: ["0600000000"],
     });
 
-    res.json({
-      ok: true,
-      result,
-    });
+    res.json({ ok: true, result });
   } catch (error) {
     console.error("❌ Erreur test push :", error);
     res.status(500).json({

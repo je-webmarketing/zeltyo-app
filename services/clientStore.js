@@ -1,186 +1,192 @@
 import { db } from "./firebaseAdmin.js";
 
-const clientsCollection = db.collection("clients");
+const isFirestoreReady = !!db;
+const COLLECTION_NAME = "clients";
 
-const FALLBACK_CLIENTS = [
-  {
-    id: "client-1",
-    loyaltyId: "CL-1001",
-    name: "Client Test",
-    email: "client@test.com",
-    phone: "0600000000",
-    subscriptionId: "a67b1b72-bc4c-431b-a3b8-9bf9d79d3079",
-    points: 5,
-    rewardGoal: 10,
-    visits: 2,
-    totalSpent: 40,
-    lastVisitAt: "2024-03-01T10:00:00.000Z",
-    rewardNotified: false,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    segment: "inactive",
-  },
-];
+let localClients = [];
 
-function getSegment(client) {
-  const visits = Number(client.visits ?? 0);
-  const totalSpent = Number(client.totalSpent ?? 0);
-  const rewardGoal = Number(client.rewardGoal ?? 10);
-  const points = Number(client.points ?? 0);
-  const lastVisitAt = client.lastVisitAt ? new Date(client.lastVisitAt) : null;
-
-  let daysSinceLastVisit = 0;
-  if (lastVisitAt && !Number.isNaN(lastVisitAt.getTime())) {
-    daysSinceLastVisit = Math.floor(
-      (Date.now() - lastVisitAt.getTime()) / (1000 * 60 * 60 * 24)
-    );
-  }
-
-  if (daysSinceLastVisit >= 30 && visits > 0) return "inactive";
-  if (visits >= 10 || totalSpent >= 200) return "vip";
-  if (points >= rewardGoal - 2 && points < rewardGoal) return "near_reward";
-  if (visits >= 3) return "loyal";
-  return "nouveau";
+function getCollection() {
+  if (!db) return null;
+  return db.collection(COLLECTION_NAME);
 }
 
-async function getAllClientsFromFirestore() {
-  const snapshot = await clientsCollection.get();
-  return snapshot.docs.map((doc) => ({
-    id: doc.id,
-    ...doc.data(),
-  }));
+function normalizeClient(client = {}) {
+  const fallbackId = `CL-${Date.now()}`;
+
+  return {
+    id: client.id || fallbackId,
+    loyaltyId: client.loyaltyId || client.id || fallbackId,
+    name: client.name || "",
+    email: client.email || "",
+    phone: client.phone || "",
+    subscriptionId: client.subscriptionId || "",
+    visits: Number(client.visits || 0),
+    points: Number(client.points || 0),
+    totalSpent: Number(client.totalSpent || 0),
+    rewardsAvailable: Number(client.rewardsAvailable || 0),
+    rewardGoal: Number(client.rewardGoal || 10),
+    rewardNotified: Boolean(client.rewardNotified || false),
+    segment: client.segment || "new",
+    lastVisitAt: client.lastVisitAt || null,
+    createdAt: client.createdAt || new Date().toISOString(),
+    updatedAt: client.updatedAt || new Date().toISOString(),
+  };
+}
+
+function computeSegment(client) {
+  const visits = Number(client.visits || 0);
+  const points = Number(client.points || 0);
+  const totalSpent = Number(client.totalSpent || 0);
+
+  if (points >= 20 || visits >= 10 || totalSpent >= 500) {
+    return "vip";
+  }
+
+  if (points >= 8 || visits >= 4 || totalSpent >= 120) {
+    return "loyal";
+  }
+
+  return "new";
+}
+
+function enrichClient(client) {
+  const normalized = normalizeClient(client);
+  const rewardGoal = Number(normalized.rewardGoal || 10);
+  const rewardsAvailable = Math.floor(normalized.points / rewardGoal);
+
+  return {
+    ...normalized,
+    rewardGoal,
+    rewardsAvailable,
+    segment: computeSegment(normalized),
+  };
 }
 
 export async function getAllClients() {
-  try {
-    const clients = await getAllClientsFromFirestore();
-
-    if (!clients.length) {
-      console.warn("Firestore vide, fallback clients utilisé.");
-      return FALLBACK_CLIENTS;
-    }
-
-    return clients;
-  } catch (error) {
-    console.error("getAllClients Firestore error:", error?.message || error);
-    console.warn("Fallback clients utilisé.");
-    return FALLBACK_CLIENTS;
+  if (!isFirestoreReady) {
+    console.log("⚠️ Mode local → clients local memory");
+    return localClients.map((client) => enrichClient(client));
   }
+
+  const collection = getCollection();
+  const snapshot = await collection.get();
+
+  return snapshot.docs.map((doc) =>
+    enrichClient({
+      id: doc.id,
+      ...doc.data(),
+    })
+  );
 }
 
-export async function saveAllClients(clients) {
-  try {
-    const batch = db.batch();
+export async function saveAllClients(clients = []) {
+  const prepared = clients.map(enrichClient);
+  const collection = getCollection();
 
-    for (const client of clients) {
-      const docId = client.id || client.phone;
-      if (!docId) continue;
+  if (!collection) {
+    localClients = prepared;
+    return prepared;
+  }
 
-      const ref = clientsCollection.doc(docId);
+  const snapshot = await collection.get();
+  const batch = db.batch();
 
-      batch.set(
-        ref,
-        {
-          ...client,
-          id: client.id || docId,
-          loyaltyId: client.loyaltyId || client.id || docId,
-          email: client.email || "",
-          updatedAt: new Date().toISOString(),
-        },
-        { merge: true }
+  snapshot.docs.forEach((doc) => {
+    batch.delete(doc.ref);
+  });
+
+  prepared.forEach((client) => {
+    const ref = collection.doc(client.id);
+    batch.set(ref, client);
+  });
+
+  await batch.commit();
+  return prepared;
+}
+
+export async function upsertClient(clientData = {}) {
+  const collection = getCollection();
+
+  if (!collection) {
+    const normalizedPhone = String(clientData.phone || "").trim();
+    const normalizedEmail = String(clientData.email || "")
+      .trim()
+      .toLowerCase();
+
+    const existingIndex = localClients.findIndex((client) => {
+      const clientPhone = String(client.phone || "").trim();
+      const clientEmail = String(client.email || "").trim().toLowerCase();
+
+      return (
+        (clientData.id && client.id === clientData.id) ||
+        (normalizedPhone && clientPhone === normalizedPhone) ||
+        (normalizedEmail && clientEmail === normalizedEmail)
       );
+    });
+
+    const fallbackId = clientData.id || `CL-${Date.now()}`;
+
+    const base =
+      existingIndex >= 0
+        ? localClients[existingIndex]
+        : {
+            id: fallbackId,
+            loyaltyId: clientData.loyaltyId || fallbackId,
+            createdAt: new Date().toISOString(),
+          };
+
+    const updated = enrichClient({
+      ...base,
+      ...clientData,
+      updatedAt: new Date().toISOString(),
+    });
+
+    if (existingIndex >= 0) {
+      localClients[existingIndex] = updated;
+    } else {
+      localClients.push(updated);
     }
 
-    await batch.commit();
-    return clients;
-  } catch (error) {
-    console.error("saveAllClients Firestore error:", error?.message || error);
-    console.warn("saveAllClients ignoré, fallback local conservé.");
-    return clients;
+    return updated;
   }
-}
 
-export async function upsertClient(clientData) {
-  const clients = await getAllClients();
-  const now = new Date().toISOString();
+  const allClients = await getAllClients();
 
   const normalizedPhone = String(clientData.phone || "").trim();
-  const normalizedEmail = String(clientData.email || "").trim().toLowerCase();
+  const normalizedEmail = String(clientData.email || "")
+    .trim()
+    .toLowerCase();
 
-  const existing = clients.find((c) => {
-    const cPhone = String(c.phone || "").trim();
-    const cEmail = String(c.email || "").trim().toLowerCase();
+  const existing = allClients.find((client) => {
+    const clientPhone = String(client.phone || "").trim();
+    const clientEmail = String(client.email || "").trim().toLowerCase();
 
     return (
-      (clientData.id && c.id === clientData.id) ||
-      (normalizedPhone && cPhone === normalizedPhone) ||
-      (normalizedEmail && cEmail === normalizedEmail) ||
-      (clientData.subscriptionId &&
-        c.subscriptionId === clientData.subscriptionId)
+      (clientData.id && client.id === clientData.id) ||
+      (normalizedPhone && clientPhone === normalizedPhone) ||
+      (normalizedEmail && clientEmail === normalizedEmail)
     );
   });
 
-  let client;
+  const fallbackId = clientData.id || `CL-${Date.now()}`;
 
-  if (existing) {
-    client = {
-      ...existing,
-      ...clientData,
-      phone: normalizedPhone || existing.phone || "",
-      email: normalizedEmail || existing.email || "",
-      loyaltyId: clientData.loyaltyId ?? existing.loyaltyId ?? existing.id,
-      updatedAt: now,
-    };
-  } else {
-    const newId =
-      clientData.id ||
-      normalizedPhone ||
-      `client-${Math.random().toString(36).slice(2, 10)}`;
+  const merged = enrichClient({
+    ...(existing || {}),
+    ...clientData,
+    id: existing?.id || fallbackId,
+    loyaltyId: existing?.loyaltyId || clientData.loyaltyId || fallbackId,
+    createdAt: existing?.createdAt || new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  });
 
-    const newLoyaltyId =
-      clientData.loyaltyId || `CL-${Math.random().toString(36).slice(2, 10)}`;
+  await collection.doc(merged.id).set(merged, { merge: true });
 
-    client = {
-      id: newId,
-      loyaltyId: newLoyaltyId,
-      name: String(clientData.name || "").trim(),
-      email: normalizedEmail,
-      phone: normalizedPhone,
-      subscriptionId: clientData.subscriptionId || "",
-      points: Number(clientData.points || 0),
-      rewardGoal: Number(clientData.rewardGoal || 10),
-      visits: Number(clientData.visits || 0),
-      totalSpent: Number(clientData.totalSpent || 0),
-      lastVisitAt: clientData.lastVisitAt || null,
-      rewardNotified: false,
-      createdAt: clientData.createdAt || now,
-      updatedAt: now,
-      segment: "nouveau",
-    };
-  }
-
-  try {
-    await clientsCollection.doc(client.id).set(client, { merge: true });
-    return client;
-  } catch (error) {
-    console.error("upsertClient Firestore error:", error?.message || error);
-    return client;
-  }
+  return merged;
 }
 
 export async function refreshClientSegments() {
   const clients = await getAllClients();
-
-  const updatedClients = clients.map((client) => ({
-    ...client,
-    rewardGoal: Number(client.rewardGoal ?? 10),
-    points: Number(client.points ?? 0),
-    visits: Number(client.visits ?? 0),
-    totalSpent: Number(client.totalSpent ?? 0),
-    segment: getSegment(client),
-    updatedAt: new Date().toISOString(),
-  }));
-
-  await saveAllClients(updatedClients);
-  return updatedClients;
+  const refreshed = clients.map((client) => enrichClient(client));
+  await saveAllClients(refreshed);
+  return refreshed;
 }

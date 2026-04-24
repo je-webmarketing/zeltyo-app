@@ -27,7 +27,7 @@ router.get("/__debug", async (req, res) => {
 
 router.post("/", async (req, res) => {
   try {
-    const {
+        const {
       businessId,
       clientId,
       clientName,
@@ -37,6 +37,7 @@ router.post("/", async (req, res) => {
       partySize,
       date,
       time,
+      deliveryAddress,
       note,
     } = req.body;
 
@@ -47,19 +48,24 @@ router.post("/", async (req, res) => {
       });
     }
 
-    const booking = await createBooking({
-      businessId,
-      clientId: clientId || "",
-      clientName,
-      clientPhone,
-      type: type || "reservation",
-      area: area || "interieur",
-      partySize: Number(partySize || 1),
-      date,
-      time,
-      note: note || "",
-      status: "pending",
-    });
+   const booking = await createBooking({
+  businessId,
+  clientId: clientId || "",
+  clientName,
+  clientPhone,
+  type: type || "reservation",
+  area: area || "",
+  partySize: Number(partySize || 1),
+  date,
+  time,
+  deliveryAddress: deliveryAddress || "",
+  note: note || "",
+  status: "pending",
+  merchantResponse: "",
+  proposedDate: "",
+  proposedTime: "",
+  responseAt: null,
+});
 
     return res.status(201).json({
       ok: true,
@@ -115,7 +121,12 @@ router.get("/by-client/:id", async (req, res) => {
 
 router.patch("/:id/status", async (req, res) => {
   try {
-    const { status } = req.body;
+    const {
+      status,
+      merchantResponse = "",
+      proposedDate = "",
+      proposedTime = "",
+    } = req.body;
 
     if (!status) {
       return res.status(400).json({
@@ -131,7 +142,12 @@ router.patch("/:id/status", async (req, res) => {
       });
     }
 
-    const booking = await updateBookingStatus(req.params.id, status);
+    const booking = await updateBookingStatus(req.params.id, {
+      status,
+      merchantResponse,
+      proposedDate,
+      proposedTime,
+    });
 
     if (!booking) {
       return res.status(404).json({

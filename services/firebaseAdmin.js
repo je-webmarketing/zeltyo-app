@@ -3,33 +3,33 @@ dotenv.config();
 
 import admin from "firebase-admin";
 
+let db = null;
+
 function getServiceAccount() {
   const jsonEnv = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
 
   if (!jsonEnv) {
-    throw new Error("FIREBASE_SERVICE_ACCOUNT_JSON manquant");
+    console.warn("⚠️ Firebase désactivé (pas de FIREBASE_SERVICE_ACCOUNT_JSON)");
+    return null;
   }
 
-  console.log("✅ Firebase chargé depuis variable Render");
-
+  console.log("✅ Firebase chargé depuis .env");
   return JSON.parse(jsonEnv);
 }
 
 const serviceAccount = getServiceAccount();
-console.log("FIREBASE PROJECT ID =", serviceAccount.project_id);
-console.log("FIREBASE CLIENT EMAIL =", serviceAccount.client_email);
-console.log("FIREBASE APP INIT OK");
-console.log("FIRESTORE DB READY =", !!db);
-console.log("SERVICE ACCOUNT TYPE =", serviceAccount.type);
-console.log("SERVICE ACCOUNT PROJECT ID =", serviceAccount.project_id);
-console.log("SERVICE ACCOUNT CLIENT EMAIL =", serviceAccount.client_email);
 
-if (!admin.apps.length) {
+if (serviceAccount && !admin.apps.length) {
   admin.initializeApp({
     credential: admin.credential.cert(serviceAccount),
     projectId: serviceAccount.project_id,
   });
+
+  db = admin.firestore();
+  console.log("🔥 Firestore connecté");
+} else {
+  console.log("⚠️ Firestore OFF (mode local)");
 }
 
-export const db = admin.firestore();
+export { db };
 export default admin;

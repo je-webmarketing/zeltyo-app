@@ -1,38 +1,34 @@
-async function apiFetch(url, options = {}) {
-  const response = await fetch(url, {
-    headers: {
-      "Content-Type": "application/json",
-      ...(options.headers || {}),
-    },
-    ...options,
-  });
+import { buildApiUrl } from "../config/api";
 
-  const data = await response.json().catch(() => ({}));
+export async function getBookingsByBusiness(businessId) {
+  const response = await fetch(
+    buildApiUrl(`/bookings/by-business/${businessId}`)
+  );
 
-  if (!response.ok) {
-    throw new Error(data?.error || "Erreur API");
+  const data = await response.json();
+
+  if (!response.ok || !data.ok) {
+    throw new Error(data.error || "Erreur chargement réservations");
   }
 
   return data;
 }
 
-export function buildApiUrl(path) {
-  const cleanPath = path.startsWith("/") ? path : `/${path}`;
+export async function updateBookingStatus(bookingId, status) {
+  const response = await fetch(
+    buildApiUrl(`/bookings/${bookingId}/status`),
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status }),
+    }
+  );
 
-  if (import.meta.env.DEV) {
-    return `/api${cleanPath}`;
+  const data = await response.json();
+
+  if (!response.ok || !data.ok) {
+    throw new Error(data.error || "Erreur mise à jour réservation");
   }
 
-  return `https://zeltyo-app.onrender.com${cleanPath}`;
-}
-
-export async function getBookingsByBusiness(businessId) {
-  return apiFetch(buildApiUrl(`/bookings/by-business/${businessId}`));
-}
-
-export async function updateBookingStatus(bookingId, status) {
-  return apiFetch(buildApiUrl(`/bookings/${bookingId}/status`), {
-    method: "PATCH",
-    body: JSON.stringify({ status }),
-  });
+  return data;
 }
