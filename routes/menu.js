@@ -4,6 +4,7 @@ const router = express.Router();
 
 let menuItems = [];
 
+// DEBUG
 router.get("/__debug", (req, res) => {
   res.json({
     ok: true,
@@ -13,6 +14,7 @@ router.get("/__debug", (req, res) => {
   });
 });
 
+// GET ALL
 router.get("/", (req, res) => {
   res.json({
     ok: true,
@@ -20,9 +22,10 @@ router.get("/", (req, res) => {
   });
 });
 
+// POST
 router.post("/", (req, res) => {
   try {
-    const { name, description, price, category, active } = req.body;
+    const { businessId, name, description, price, category, active } = req.body;
 
     if (!name || price === undefined || price === null || price === "") {
       return res.status(400).json({
@@ -33,6 +36,7 @@ router.post("/", (req, res) => {
 
     const item = {
       id: `MENU-${Date.now()}`,
+      businessId: businessId || "BUS-UNKNOWN", // 🔥 IMPORTANT
       name: String(name).trim(),
       description: String(description || "").trim(),
       price: Number(price),
@@ -42,6 +46,8 @@ router.post("/", (req, res) => {
     };
 
     menuItems.unshift(item);
+
+    console.log("MENU AJOUTÉ =", item); // 🔥 DEBUG
 
     return res.status(201).json({
       ok: true,
@@ -58,6 +64,7 @@ router.post("/", (req, res) => {
   }
 });
 
+// TOGGLE
 router.patch("/:id/toggle", (req, res) => {
   try {
     const { id } = req.params;
@@ -82,19 +89,22 @@ router.patch("/:id/toggle", (req, res) => {
       items: menuItems,
     });
   } catch (error) {
-    console.error("Erreur PATCH /menu/:id/toggle :", error);
+    console.error("Erreur PATCH :", error);
     return res.status(500).json({
       ok: false,
-      error: "Erreur modification menu",
+      error: "Erreur modification",
     });
   }
 });
 
+// GET BY BUSINESS
 router.get("/:businessId", (req, res) => {
   const { businessId } = req.params;
 
   const items = menuItems.filter(
-    (item) => item.businessId === businessId && item.active !== false
+    (item) =>
+      item.businessId === businessId &&
+      item.active !== false
   );
 
   return res.json({
