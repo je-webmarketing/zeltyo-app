@@ -14,6 +14,7 @@ import notificationsAdvanced from "./routes/notificationsAdvanced.js";
 import authRoutes from "./routes/auth.js";
 import bookingsRouter from "./routes/bookings.js";
 import menuRouter from "./routes/menu.js";
+import stripeRoutes from "./routes/stripe.js";
 
 dotenv.config();
 
@@ -129,6 +130,8 @@ app.use((err, req, res, next) => {
     error: "Erreur interne serveur",
   });
 });
+
+app.use("/stripe", stripeRoutes);
 
 app.listen(port, () => {
   console.log(`✅ Backend lancé sur le port ${port}`);
