@@ -254,11 +254,18 @@ router.post("/visit", async (req, res) => {
       }
     }
 
-    return res.json({
-      ok: true,
-      message: "Visite enregistrée",
-      clients: await getAllClients(),
-    });
+    const finalClients = await getAllClients();
+
+const finalClient = finalClients.find(
+  (c) => c.id === id || (phone && c.phone === phone)
+);
+
+return res.json({
+  ok: true,
+  message: "Visite enregistrée",
+  client: finalClient || null,
+  clients: finalClients,
+});
   } catch (error) {
     console.error("Erreur POST /clients/visit :", error);
     return res.status(500).json({

@@ -27,19 +27,21 @@ router.get("/__debug", async (req, res) => {
 
 router.post("/", async (req, res) => {
   try {
-        const {
-      businessId,
-      clientId,
-      clientName,
-      clientPhone,
-      type,
-      area,
-      partySize,
-      date,
-      time,
-      deliveryAddress,
-      note,
-    } = req.body;
+      const {
+  businessId,
+  clientId,
+  clientName,
+  clientPhone,
+  type,
+  area,
+  partySize,
+  date,
+  time,
+  deliveryAddress,
+  note,
+  items = [],
+  totalPrice = 0,
+} = req.body;
 
     if (!businessId || !clientName || !clientPhone || !date || !time) {
       return res.status(400).json({
@@ -48,7 +50,7 @@ router.post("/", async (req, res) => {
       });
     }
 
-   const booking = await createBooking({
+  const booking = await createBooking({
   businessId,
   clientId: clientId || "",
   clientName,
@@ -60,6 +62,8 @@ router.post("/", async (req, res) => {
   time,
   deliveryAddress: deliveryAddress || "",
   note: note || "",
+  items: Array.isArray(items) ? items : [],
+  totalPrice: Number(totalPrice || 0),
   status: "pending",
   merchantResponse: "",
   proposedDate: "",
