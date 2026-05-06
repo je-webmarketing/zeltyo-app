@@ -1,6 +1,7 @@
 import express from "express";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+import { requireAuth } from "../middleware/requireAuth.js";
 
 const router = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET || "change-me-in-production";
@@ -102,10 +103,10 @@ router.post("/merchant-login", async (req, res) => {
   }
 });
 
-router.get("/merchant-me", (req, res) => {
-  return res.status(501).json({
-    ok: false,
-    error: "À brancher avec requireAuth si besoin",
+router.get("/merchant-me", requireAuth, (req, res) => {
+  return res.json({
+    ok: true,
+    user: req.user,
   });
 });
 

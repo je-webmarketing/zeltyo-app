@@ -5,18 +5,23 @@ import admin from "firebase-admin";
 
 let db = null;
 
-function getServiceAccount() {
-  const jsonEnv = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+import fs from "fs";
+import path from "path";
 
-  if (!jsonEnv) {
-    console.warn("⚠️ FIREBASE_SERVICE_ACCOUNT_JSON manquant");
+function getServiceAccount() {
+  const filePath = process.env.FIREBASE_SERVICE_ACCOUNT_FILE;
+
+  if (!filePath) {
+    console.warn("⚠️ FIREBASE_SERVICE_ACCOUNT_FILE manquant");
     return null;
   }
 
   try {
-    return JSON.parse(jsonEnv);
+    const fullPath = path.resolve(filePath);
+    const file = fs.readFileSync(fullPath, "utf-8");
+    return JSON.parse(file);
   } catch (error) {
-    console.error("❌ FIREBASE_SERVICE_ACCOUNT_JSON invalide :", error.message);
+    console.error("❌ Erreur lecture fichier Firebase :", error.message);
     return null;
   }
 }

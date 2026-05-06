@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  getBookingsByBusiness,
-  updateBookingStatus,
+    updateBookingStatus,
 } from "../lib/bookingsApi";
+import { buildApiUrl } from "../config/api";
 
 const COLORS = {
   bg: "#050505",
@@ -100,24 +100,36 @@ export default function BookingsManager({
   const [success, setSuccess] = useState("");
   const [actionId, setActionId] = useState("");
   const [filter, setFilter] = useState("all");
+ const [viewMode, setViewMode] = useState("active"); 
 
-  async function loadBookings() {
-    try {
-      setLoading(true);
-      setError("");
+async function loadBookings() {
+  try {
+    setLoading(true);
+    setError("");
 
-      const data = await getBookingsByBusiness(businessId);
-      setBookings(Array.isArray(data?.bookings) ? data.bookings : []);
-    } catch (err) {
-      setError(err.message || "Impossible de charger les réservations");
-    } finally {
-      setLoading(false);
+    const endpoint =
+      viewMode === "archives"
+        ? `/bookings/archived/${businessId}`
+        : `/bookings/by-business/${businessId}`;
+
+    const response = await fetch(buildApiUrl(endpoint));
+    const data = await response.json();
+
+    if (!response.ok || !data.ok) {
+      throw new Error(data.error || "Impossible de charger les réservations");
     }
+
+    setBookings(Array.isArray(data.bookings) ? data.bookings : []);
+  } catch (err) {
+    setError(err.message || "Impossible de charger les réservations");
+  } finally {
+    setLoading(false);
   }
+}
 
   useEffect(() => {
-    loadBookings();
-  }, [businessId]);
+  loadBookings();
+}, [businessId, viewMode]);
 
   const filteredBookings = useMemo(() => {
     const sorted = [...bookings].sort((a, b) => {
@@ -206,6 +218,16 @@ export default function BookingsManager({
           </p>
         </div>
 
+        <div style={{ display: "flex", gap: 10, justifyContent: "center", margin: "12px 0 18px" }}>
+  <button onClick={() => setViewMode("active")}>
+    Demandes actives
+  </button>
+
+  <button onClick={() => setViewMode("archives")}>
+    Archives
+  </button>
+</div>
+
         <button
           onClick={loadBookings}
           style={{
@@ -222,14 +244,32 @@ export default function BookingsManager({
         </button>
       </div>
 
-      <div
-        style={{
-          display: "flex",
-          gap: 10,
-          flexWrap: "wrap",
-          marginBottom: 16,
-        }}
-      >
+     <div
+  style={{
+    display: "flex",
+    gap: 10,
+    marginBottom: 16,
+  }}
+>
+  <FilterButton
+    active={viewMode === "active"}
+    onClick={() => {
+      setViewMode("active");
+      setFilter("all");
+    }}
+    label="Réservations actives"
+  />
+
+  <FilterButton
+    active={viewMode === "archives"}
+    onClick={() => {
+      setViewMode("archives");
+      setFilter("all");
+    }}
+    label="Archives"
+  />
+      
+      
         <FilterButton
           active={filter === "all"}
           onClick={() => setFilter("all")}
