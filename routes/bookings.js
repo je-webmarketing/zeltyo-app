@@ -180,7 +180,23 @@ router.get("/by-business/:id", async (req, res) => {
 router.get("/archived/:businessId", async (req, res) => {
   try {
     const businessId = String(req.params.businessId || "").trim();
-    const bookings = await getArchivedBookingsByBusinessId(businessId);
+    const allBookings = await getAllBookings();
+
+    const bookings = allBookings
+      .filter((booking) => {
+        const bookingBusinessId = String(booking.businessId || "").trim();
+        const bookingMerchantId = String(booking.merchantId || "").trim();
+
+        return (
+          (bookingBusinessId === businessId || bookingMerchantId === businessId) &&
+          booking.archived === true
+        );
+      })
+      .sort(
+        (a, b) =>
+          new Date(b.archivedAt || b.updatedAt || b.createdAt) -
+          new Date(a.archivedAt || a.updatedAt || a.createdAt)
+      );
 
     return res.json({
       ok: true,
@@ -190,7 +206,7 @@ router.get("/archived/:businessId", async (req, res) => {
     console.error("Erreur GET /bookings/archived/:businessId :", error);
     return res.status(500).json({
       ok: false,
-      error: "Erreur récupération archives",
+      error: error.message || "Erreur récupération archives",
     });
   }
 });
