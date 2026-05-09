@@ -337,4 +337,40 @@ router.patch("/:id/restore", async (req, res) => {
   }
 });
 
+router.patch("/:id/propose-slot", async (req, res) => {
+  try {
+    const { proposedDate = "", proposedTime = "", merchantResponse = "" } = req.body;
+
+    const booking = await updateBookingStatus(req.params.id, {
+      status: "confirmed",
+      merchantResponse,
+      proposedDate,
+      proposedTime,
+      archived: false,
+      archivedAt: null,
+      updatedAt: new Date().toISOString(),
+      responseAt: new Date().toISOString(),
+    });
+
+    if (!booking) {
+      return res.status(404).json({
+        ok: false,
+        error: "Réservation introuvable",
+      });
+    }
+
+    return res.json({
+      ok: true,
+      message: "Nouveau créneau proposé",
+      booking,
+    });
+  } catch (error) {
+    console.error("Erreur PATCH /bookings/:id/propose-slot :", error);
+    return res.status(500).json({
+      ok: false,
+      error: "Erreur proposition créneau",
+    });
+  }
+});
+
 export default router;

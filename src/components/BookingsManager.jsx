@@ -107,6 +107,9 @@ export default function BookingsManager({
   const [actionId, setActionId] = useState("");
   const [filter, setFilter] = useState("all");
  const [viewMode, setViewMode] = useState("active"); 
+ const [proposalDate, setProposalDate] = useState("");
+const [proposalTime, setProposalTime] = useState("");
+const [merchantMessage, setMerchantMessage] = useState("");
 
 async function loadBookings() {
   try {
@@ -188,6 +191,45 @@ async function handleStatusChange(bookingId, status) {
     );
   } catch (err) {
     setError(err.message || "Erreur lors de la mise à jour");
+  } finally {
+    setActionId("");
+  }
+}
+
+async function handleProposeSlot(bookingId) {
+  try {
+    setActionId(bookingId);
+
+    const response = await fetch(
+      buildApiUrl(`/bookings/${bookingId}/propose-slot`),
+      {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          proposedDate: proposalDate,
+          proposedTime: proposalTime,
+          merchantResponse: merchantMessage,
+        }),
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok || !data.ok) {
+      throw new Error(data.error || "Erreur proposition créneau");
+    }
+
+    await loadBookings();
+
+    setProposalDate("");
+    setProposalTime("");
+    setMerchantMessage("");
+
+    setSuccess("Nouveau créneau proposé.");
+  } catch (err) {
+    setError(err.message || "Erreur proposition");
   } finally {
     setActionId("");
   }
