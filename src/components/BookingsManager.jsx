@@ -53,6 +53,12 @@ function getStatusMeta(status) {
         color: COLORS.warning,
         bg: "rgba(245, 158, 11, 0.12)",
       };
+     case "completed":
+  return {
+    label: "Terminée",
+    color: "#3b82f6",
+    bg: "rgba(59,130,246,0.12)",
+  }; 
   }
 }
 
@@ -151,30 +157,66 @@ async function loadBookings() {
     };
   }, [bookings]);
 
-  async function handleStatusChange(bookingId, status) {
-    try {
-      setActionId(bookingId);
-      setError("");
-      setSuccess("");
+async function handleStatusChange(bookingId, status) {
+  try {
+    setActionId(bookingId);
+    setError("");
+    setSuccess("");
 
-      const data = await updateBookingStatus(bookingId, status);
-      const updatedBooking = data?.booking;
+    const response = await fetch(buildApiUrl(`/bookings/${bookingId}/status`), {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status }),
+    });
 
-      setBookings((prev) =>
-        prev.map((item) => (item.id === bookingId ? updatedBooking : item))
-      );
+    const data = await response.json();
 
-      setSuccess(
-        status === "confirmed"
-          ? "Réservation acceptée avec succès."
-          : "Réservation refusée."
-      );
-    } catch (err) {
-      setError(err.message || "Erreur lors de la mise à jour du statut");
-    } finally {
-      setActionId("");
+    if (!response.ok || !data.ok) {
+      throw new Error(data.error || "Erreur mise à jour réservation");
     }
+
+    await loadBookings();
+
+    setSuccess(
+      status === "confirmed"
+        ? "Réservation acceptée."
+        : status === "cancelled"
+        ? "Réservation refusée et archivée."
+        : status === "completed"
+        ? "Réservation terminée et archivée."
+        : "Réservation mise à jour."
+    );
+  } catch (err) {
+    setError(err.message || "Erreur lors de la mise à jour");
+  } finally {
+    setActionId("");
   }
+}
+
+async function handleRestore(bookingId) {
+  try {
+    setActionId(bookingId);
+    setError("");
+    setSuccess("");
+
+    const response = await fetch(buildApiUrl(`/bookings/${bookingId}/restore`), {
+      method: "PATCH",
+    });
+
+    const data = await response.json();
+
+    if (!response.ok || !data.ok) {
+      throw new Error(data.error || "Erreur restauration");
+    }
+
+    await loadBookings();
+    setSuccess("Réservation restaurée.");
+  } catch (err) {
+    setError(err.message || "Erreur restauration");
+  } finally {
+    setActionId("");
+  }
+}
 
   return (
     <section
@@ -468,6 +510,41 @@ async function loadBookings() {
                   >
                     {isBusy ? "Traitement..." : "❌ Refuser"}
                   </button>
+
+                  <button
+  onClick={() => handleStatusChange(booking.id, "completed")}
+  disabled={isBusy || viewMode === "archives"}
+  style={{
+    background: "#3b82f6",
+    color: "#fff",
+    border: "none",
+    borderRadius: 10,
+    padding: "10px 14px",
+    cursor: isBusy || viewMode === "archives" ? "not-allowed" : "pointer",
+    fontWeight: 700,
+    opacity: isBusy || viewMode === "archives" ? 0.7 : 1,
+  }}
+>
+  ✅ Terminée
+</button>
+
+{viewMode === "archives" && (
+  <button
+    onClick={() => handleRestore(booking.id)}
+    disabled={isBusy}
+    style={{
+      background: "transparent",
+      color: COLORS.goldLight,
+      border: `1px solid ${COLORS.gold}`,
+      borderRadius: 10,
+      padding: "10px 14px",
+      cursor: isBusy ? "not-allowed" : "pointer",
+      fontWeight: 700,
+    }}
+  >
+    Restaurer
+  </button>
+)}
                 </div>
               </article>
             );
