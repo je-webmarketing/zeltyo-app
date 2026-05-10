@@ -1,36 +1,58 @@
-import fs from "fs/promises";
-import path from "path";
+import express from "express";
 
-const FILE_PATH = path.resolve("data/promotions.json");
+import {
+  getAllPromotions,
+  addPromotion,
+} from "../services/promotionStore.js";
 
-async function ensureFile() {
+const router = express.Router();
+
+router.get("/public/:businessId", async (req, res) => {
   try {
-    await fs.access(FILE_PATH);
-  } catch {
-    await fs.mkdir(path.dirname(FILE_PATH), { recursive: true });
-    await fs.writeFile(FILE_PATH, "[]");
+    const { businessId } = req.params;
+
+    const promotions = await getAllPromotions();
+
+    const filtered = promotions.filter(
+      (promo) => promo.businessId === businessId
+    );
+
+    return res.json({
+      ok: true,
+      promotions: filtered,
+    });
+  } catch (error) {
+    console.error("Erreur GET promotions publiques :", error);
+
+    return res.status(500).json({
+      ok: false,
+      error: "Erreur serveur",
+    });
   }
-}
+});
 
-export async function getAllPromotions() {
-  await ensureFile();
-
-  const raw = await fs.readFile(FILE_PATH, "utf-8");
-
+router.post("/", async (req, res) => {
   try {
-    return JSON.parse(raw);
-  } catch {
-    return [];
+    const promotion = {
+      id: `PROMO-${Date.now()}`,
+      ...req.body,
+      createdAt: new Date().toISOString(),
+    };
+
+    await addPromotion(promotion);
+
+    return res.json({
+      ok: true,
+      promotion,
+    });
+  } catch (error) {
+    console.error("Erreur création promotion :", error);
+
+    return res.status(500).json({
+      ok: false,
+      error: "Erreur serveur",
+    });
   }
-}
+});
 
-export async function saveAllPromotions(promotions) {
-  await ensureFile();
-
-  await fs.writeFile(
-    FILE_PATH,
-    JSON.stringify(promotions, null, 2)
-  );
-
-  return promotions;
-}
+export default router;
