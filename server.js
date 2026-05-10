@@ -20,6 +20,7 @@ dotenv.config();
 
 const app = express();
 const port = process.env.PORT || 3001;
+const isProd = process.env.NODE_ENV === "production";
 
 console.log("✅ ZELTYO BACKEND CLEAN");
 
@@ -38,6 +39,40 @@ const allowedOrigins = [
   process.env.MERCHANT_APP_URL,
 ].filter(Boolean);
 
+function basicRateLimit({ windowMs = 60_000, max = 120 } = {}) {
+  const hits = new Map();
+
+  return (req, res, next) => {
+    const key =
+      req.headers["x-forwarded-for"]?.split(",")[0]?.trim() ||
+      req.socket.remoteAddress ||
+      "unknown";
+
+    const now = Date.now();
+    const current = hits.get(key) || { count: 0, resetAt: now + windowMs };
+
+    if (now > current.resetAt) {
+      current.count = 0;
+      current.resetAt = now + windowMs;
+    }
+
+    current.count += 1;
+    hits.set(key, current);
+
+    if (current.count > max) {
+      return res.status(429).json({
+        ok: false,
+        error: "Trop de requêtes, réessayez dans un instant",
+      });
+    }
+
+    return next();
+  };
+}
+
+app.disable("x-powered-by");
+app.set("trust proxy", 1);
+
 app.use(
   cors({
     origin(origin, callback) {
@@ -53,13 +88,14 @@ app.use(
   })
 );
 
-app.use(express.json());
+app.use(express.json({ limit: "500kb" }));
+app.use(basicRateLimit({ windowMs: 60_000, max: isProd ? 180 : 1000 }));
 
 app.get("/health", (req, res) => {
   res.json({
     ok: true,
     service: "zeltyo-backend",
-    version: "MENU_READY_01",
+    version: "SECURITY_READY_01",
   });
 });
 
@@ -67,7 +103,7 @@ app.get("/", (req, res) => {
   res.json({
     ok: true,
     message: "Zeltyo backend OK",
-    version: "MENU_READY_01",
+    version: "SECURITY_READY_01",
   });
 });
 
@@ -79,24 +115,27 @@ app.use("/clients", clientsRouter);
 app.use("/bookings", bookingsRouter);
 app.use("/menu", menuRouter);
 app.use("/automation-segmented", automationSegmentedRouter);
+app.use("/stripe", stripeRoutes);
 
-app.get("/test-push", async (req, res) => {
-  try {
-    const result = await sendPush({
-      title: "Test Zeltyo",
-      message: "La notification push fonctionne 🚀",
-      externalIds: ["0600000000"],
-    });
+if (!isProd) {
+  app.get("/test-push", async (req, res) => {
+    try {
+      const result = await sendPush({
+        title: "Test Zeltyo",
+        message: "La notification push fonctionne 🚀",
+        externalIds: ["0600000000"],
+      });
 
-    res.json({ ok: true, result });
-  } catch (error) {
-    console.error("❌ Erreur test push :", error);
-    res.status(500).json({
-      ok: false,
-      error: error.message,
-    });
-  }
-});
+      res.json({ ok: true, result });
+    } catch (error) {
+      console.error("❌ Erreur test push :", error);
+      res.status(500).json({
+        ok: false,
+        error: "Erreur test push",
+      });
+    }
+  });
+}
 
 cron.schedule("0 10 * * *", async () => {
   console.log("⏰ Lancement automatique daily 10h");
@@ -111,8 +150,15 @@ cron.schedule("0 10 * * *", async () => {
     const vipResults = await runSegmentedAutomation("vip");
     console.log("✅ VIP :", vipResults.length);
   } catch (error) {
-    console.error("❌ Erreur cron daily :", error);
+    console.error("❌ Erreur cron daily :", error.message);
   }
+});
+
+app.use((req, res) => {
+  return res.status(404).json({
+    ok: false,
+    error: "Route introuvable",
+  });
 });
 
 app.use((err, req, res, next) => {
@@ -121,7 +167,7 @@ app.use((err, req, res, next) => {
   if (err.message?.includes("CORS")) {
     return res.status(403).json({
       ok: false,
-      error: err.message,
+      error: isProd ? "Origine non autorisée" : err.message,
     });
   }
 
@@ -130,8 +176,6 @@ app.use((err, req, res, next) => {
     error: "Erreur interne serveur",
   });
 });
-
-app.use("/stripe", stripeRoutes);
 
 app.listen(port, () => {
   console.log(`✅ Backend lancé sur le port ${port}`);

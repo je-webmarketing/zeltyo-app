@@ -10,7 +10,23 @@ const router = express.Router();
 
 console.log("✅ routes/automationSegmented.js chargé");
 
+const ALLOWED_TYPES = ["inactive", "loyal", "vip", "near_reward"];
+
+function cleanType(value) {
+  return String(value || "").trim();
+}
+
+function isAllowedType(type) {
+  return ALLOWED_TYPES.includes(type);
+}
+
 export async function runSegmentedAutomation(type) {
+  const safeType = cleanType(type);
+
+  if (!isAllowedType(safeType)) {
+    throw new Error("Type de segmentation invalide");
+  }
+
   const clients = await refreshClientSegments();
   const results = [];
 
@@ -20,22 +36,26 @@ export async function runSegmentedAutomation(type) {
     const lastVisit = client.lastVisitAt ? new Date(client.lastVisitAt) : null;
     const daysSinceLastVisit =
       lastVisit && !Number.isNaN(lastVisit.getTime())
-        ? Math.floor((Date.now() - lastVisit.getTime()) / (1000 * 60 * 60 * 24))
+        ? Math.floor((Date.now() - lastVisit.getTime()) / 86400000)
         : null;
 
     let message = null;
 
-    if (type === "inactive" && daysSinceLastVisit !== null && daysSinceLastVisit >= 7) {
+    if (
+      safeType === "inactive" &&
+      daysSinceLastVisit !== null &&
+      daysSinceLastVisit >= 7
+    ) {
       message =
         "On ne vous a pas vu depuis un moment 👀 Revenez profiter d’un avantage.";
     }
 
-    if (type === "loyal" && client.segment === "loyal") {
+    if (safeType === "loyal" && client.segment === "loyal") {
       message =
         "Merci pour votre fidélité 🙌 Continuez et débloquez votre récompense.";
     }
 
-    if (type === "vip" && client.segment === "vip") {
+    if (safeType === "vip" && client.segment === "vip") {
       message =
         "Client VIP ⭐ Un bonus exclusif vous attend lors de votre prochaine visite.";
     }
@@ -48,9 +68,9 @@ export async function runSegmentedAutomation(type) {
     );
 
     results.push({
-      phone: client.phone,
+      clientId: client.id,
       segment: client.segment,
-      type,
+      type: safeType,
       result,
     });
   }
@@ -64,14 +84,27 @@ router.post(
   requireRole("merchant_admin"),
   async (req, res) => {
     try {
-      const { type } = req.body;
+      const type = cleanType(req.body.type);
+
+      if (!isAllowedType(type)) {
+        return res.status(400).json({
+          ok: false,
+          error: "Type de segmentation invalide",
+        });
+      }
+
       const results = await runSegmentedAutomation(type);
-      return res.json({ ok: true, results });
+
+      return res.json({
+        ok: true,
+        count: results.length,
+        results,
+      });
     } catch (error) {
-      console.error("Erreur automation segmentée :", error);
+      console.error("Erreur automation segmentée :", error.message);
       return res.status(500).json({
         ok: false,
-        error: error?.message || "Erreur serveur",
+        error: "Erreur automation segmentée",
       });
     }
   }
@@ -83,17 +116,31 @@ router.post(
   requireRole("merchant_admin"),
   async (req, res) => {
     try {
-      const { type } = req.body;
+      const type = cleanType(req.body.type);
+
+      if (!isAllowedType(type)) {
+        return res.status(400).json({
+          ok: false,
+          error: "Type de promotion invalide",
+        });
+      }
+
       const clients = await refreshClientSegments();
 
       let filteredClients = [];
 
       if (type === "inactive") {
-        filteredClients = clients.filter((client) => client.segment === "inactive");
+        filteredClients = clients.filter(
+          (client) => client.segment === "inactive"
+        );
       }
 
       if (type === "vip") {
         filteredClients = clients.filter((client) => client.segment === "vip");
+      }
+
+      if (type === "loyal") {
+        filteredClients = clients.filter((client) => client.segment === "loyal");
       }
 
       if (type === "near_reward") {
@@ -104,7 +151,9 @@ router.post(
         });
       }
 
-      const withSubscription = filteredClients.filter((client) => client.subscriptionId);
+      const withSubscription = filteredClients.filter(
+        (client) => client.subscriptionId && client.phone
+      );
 
       if (!withSubscription.length) {
         return res.json({
@@ -114,9 +163,7 @@ router.post(
         });
       }
 
-      const externalIds = withSubscription
-        .map((client) => client.phone)
-        .filter(Boolean);
+      const externalIds = withSubscription.map((client) => client.phone);
 
       const result = await sendPush({
         title: "🎯 Offre personnalisée",
@@ -130,14 +177,11 @@ router.post(
         result,
       });
     } catch (error) {
-      console.error("Erreur send-smart-promo :", error);
-      console.error("Erreur send-smart-promo message :", error?.message);
-      console.error("Erreur send-smart-promo code :", error?.code);
-      console.error("Erreur send-smart-promo stack :", error?.stack);
+      console.error("Erreur send-smart-promo :", error.message);
 
       return res.status(500).json({
         ok: false,
-        error: error?.message || "Erreur serveur",
+        error: "Erreur envoi promotion segmentée",
       });
     }
   }

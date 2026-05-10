@@ -10,13 +10,38 @@ import {
   getAllBookings,
 } from "../services/bookingStore.js";
 
+import {
+  requireAuth,
+  requireRole,
+  requireBusinessAccess,
+} from "../middleware/auth.js";
+
 console.log("✅ routes/bookings.js chargé");
 
 const router = express.Router();
 
 const ALLOWED_STATUSES = ["pending", "confirmed", "cancelled", "completed"];
 
-router.get("/__debug", async (req, res) => {
+function blockProduction(req, res, next) {
+  if (process.env.NODE_ENV === "production") {
+    return res.status(403).json({
+      ok: false,
+      error: "Route désactivée en production",
+    });
+  }
+
+  return next();
+}
+
+function normalizeText(value) {
+  return String(value || "").trim();
+}
+
+function isSameBusiness(req, businessId) {
+  return String(req.user?.businessId || "").trim() === String(businessId || "").trim();
+}
+
+router.get("/__debug", blockProduction, async (req, res) => {
   return res.json({
     ok: true,
     message: "bookings router OK",
@@ -30,11 +55,12 @@ router.get("/__debug", async (req, res) => {
       "/archived/:businessId",
       "/:id/status",
       "/:id/restore",
+      "/:id/propose-slot",
     ],
   });
 });
 
-router.get("/purge/old", async (req, res) => {
+router.get("/purge/old", requireAuth, requireRole("admin"), async (req, res) => {
   try {
     await purgeOldBookings();
 
@@ -51,7 +77,7 @@ router.get("/purge/old", async (req, res) => {
   }
 });
 
-router.get("/purge/all", async (req, res) => {
+router.get("/purge/all", requireAuth, requireRole("admin"), blockProduction, async (req, res) => {
   try {
     await clearAllBookings();
 
@@ -70,25 +96,23 @@ router.get("/purge/all", async (req, res) => {
 
 router.post("/", async (req, res) => {
   try {
-    console.log("📩 Payload réservation reçu :", req.body);
-
-    const businessId =
+    const businessId = normalizeText(
       req.body.businessId ||
-      req.body.merchantId ||
-      req.body.business?._id ||
-      req.body.business?.id ||
-      "";
+        req.body.merchantId ||
+        req.body.business?._id ||
+        req.body.business?.id
+    );
 
-    const clientId = req.body.clientId || "";
-    const clientName = String(req.body.clientName || "").trim();
-    const clientPhone = String(req.body.clientPhone || "").trim();
-    const type = req.body.type || "reservation";
-    const area = req.body.area || "";
+    const clientId = normalizeText(req.body.clientId);
+    const clientName = normalizeText(req.body.clientName);
+    const clientPhone = normalizeText(req.body.clientPhone);
+    const type = normalizeText(req.body.type) || "reservation";
+    const area = normalizeText(req.body.area) || "interieur";
     const partySize = Number(req.body.partySize || 1);
-    const date = req.body.date || "";
-    const time = req.body.time || "";
-    const deliveryAddress = req.body.deliveryAddress || "";
-    const note = req.body.note || "";
+    const date = normalizeText(req.body.date);
+    const time = normalizeText(req.body.time);
+    const deliveryAddress = normalizeText(req.body.deliveryAddress);
+    const note = normalizeText(req.body.note);
     const items = Array.isArray(req.body.items) ? req.body.items : [];
     const totalPrice = Number(req.body.totalPrice || 0);
 
@@ -96,13 +120,6 @@ router.post("/", async (req, res) => {
       return res.status(400).json({
         ok: false,
         error: "businessId, clientName, clientPhone, date et time obligatoires",
-        received: {
-          businessId,
-          clientName,
-          clientPhone,
-          date,
-          time,
-        },
       });
     }
 
@@ -114,13 +131,13 @@ router.post("/", async (req, res) => {
       clientPhone,
       type,
       area,
-      partySize,
+      partySize: Number.isFinite(partySize) && partySize > 0 ? partySize : 1,
       date,
       time,
       deliveryAddress,
       note,
       items,
-      totalPrice,
+      totalPrice: Number.isFinite(totalPrice) ? totalPrice : 0,
       status: "pending",
       archived: false,
       archivedAt: null,
@@ -133,8 +150,6 @@ router.post("/", async (req, res) => {
       updatedAt: new Date().toISOString(),
     });
 
-    console.log("✅ Réservation créée :", booking);
-
     return res.status(201).json({
       ok: true,
       message: "Réservation envoyée",
@@ -144,76 +159,81 @@ router.post("/", async (req, res) => {
     console.error("Erreur POST /bookings :", error);
     return res.status(500).json({
       ok: false,
-      error: error.message || "Erreur création réservation",
-      stack: error.stack,
+      error: "Erreur création réservation",
     });
   }
 });
 
-router.get("/by-business/:id", async (req, res) => {
+router.get("/by-business/:id", requireAuth, async (req, res) => {
   try {
-    const id = String(req.params.id || "").trim();
+    const id = normalizeText(req.params.id);
 
-    console.log("👉 businessId reçu :", id);
+    if (!isSameBusiness(req, id)) {
+      return res.status(403).json({
+        ok: false,
+        error: "Accès interdit à ce commerce",
+      });
+    }
 
     const bookings = await getBookingsByBusinessId(id);
 
-    const activeBookings = Array.isArray(bookings)
-      ? bookings.filter((booking) => booking.archived !== true)
-      : [];
-
-    console.log("📅 Réservations actives trouvées :", activeBookings.length);
-
     return res.json({
       ok: true,
-      bookings: activeBookings,
+      bookings: Array.isArray(bookings)
+        ? bookings.filter((booking) => booking.archived !== true)
+        : [],
     });
   } catch (error) {
     console.error("Erreur GET /bookings/by-business/:id :", error);
     return res.status(500).json({
       ok: false,
-      error: error.message || "Erreur récupération réservations commerce",
+      error: "Erreur récupération réservations commerce",
     });
   }
 });
 
-router.get("/archived/:businessId", async (req, res) => {
-  try {
-    const businessId = String(req.params.businessId || "").trim();
-    const allBookings = await getAllBookings();
+router.get(
+  "/archived/:businessId",
+  requireAuth,
+  requireBusinessAccess,
+  async (req, res) => {
+    try {
+      const businessId = normalizeText(req.params.businessId);
+      const allBookings = await getAllBookings();
 
-    const bookings = allBookings
-      .filter((booking) => {
-        const bookingBusinessId = String(booking.businessId || "").trim();
-        const bookingMerchantId = String(booking.merchantId || "").trim();
+      const bookings = allBookings
+        .filter((booking) => {
+          const bookingBusinessId = normalizeText(booking.businessId);
+          const bookingMerchantId = normalizeText(booking.merchantId);
 
-        return (
-          (bookingBusinessId === businessId || bookingMerchantId === businessId) &&
-          booking.archived === true
+          return (
+            (bookingBusinessId === businessId || bookingMerchantId === businessId) &&
+            booking.archived === true
+          );
+        })
+        .sort(
+          (a, b) =>
+            new Date(b.archivedAt || b.updatedAt || b.createdAt) -
+            new Date(a.archivedAt || a.updatedAt || a.createdAt)
         );
-      })
-      .sort(
-        (a, b) =>
-          new Date(b.archivedAt || b.updatedAt || b.createdAt) -
-          new Date(a.archivedAt || a.updatedAt || a.createdAt)
-      );
 
-    return res.json({
-      ok: true,
-      bookings,
-    });
-  } catch (error) {
-    console.error("Erreur GET /bookings/archived/:businessId :", error);
-    return res.status(500).json({
-      ok: false,
-      error: error.message || "Erreur récupération archives",
-    });
+      return res.json({
+        ok: true,
+        bookings,
+      });
+    } catch (error) {
+      console.error("Erreur GET /bookings/archived/:businessId :", error);
+      return res.status(500).json({
+        ok: false,
+        error: "Erreur récupération archives",
+      });
+    }
   }
-});
+);
 
 router.get("/by-client/:id", async (req, res) => {
   try {
-    const clientId = String(req.params.id || "").trim();
+    const clientId = normalizeText(req.params.id);
     const bookings = await getBookingsByClientId(clientId);
 
     return res.json({
@@ -231,7 +251,7 @@ router.get("/by-client/:id", async (req, res) => {
 
 router.get("/by-phone/:phone", async (req, res) => {
   try {
-    const phone = String(req.params.phone || "").replace(/\D/g, "");
+    const phone = normalizeText(req.params.phone).replace(/\D/g, "");
     const bookings = await getBookingsByClientPhone(phone);
 
     return res.json({
@@ -247,14 +267,12 @@ router.get("/by-phone/:phone", async (req, res) => {
   }
 });
 
-router.patch("/:id/status", async (req, res) => {
+router.patch("/:id/status", requireAuth, async (req, res) => {
   try {
-    const {
-      status,
-      merchantResponse = "",
-      proposedDate = "",
-      proposedTime = "",
-    } = req.body;
+    const status = normalizeText(req.body.status);
+    const merchantResponse = normalizeText(req.body.merchantResponse);
+    const proposedDate = normalizeText(req.body.proposedDate);
+    const proposedTime = normalizeText(req.body.proposedTime);
 
     if (!status) {
       return res.status(400).json({
@@ -266,7 +284,7 @@ router.patch("/:id/status", async (req, res) => {
     if (!ALLOWED_STATUSES.includes(status)) {
       return res.status(400).json({
         ok: false,
-        error: "status invalide (pending, confirmed, cancelled, completed)",
+        error: "status invalide",
       });
     }
 
@@ -290,6 +308,13 @@ router.patch("/:id/status", async (req, res) => {
       });
     }
 
+    if (!isSameBusiness(req, booking.businessId || booking.merchantId)) {
+      return res.status(403).json({
+        ok: false,
+        error: "Action interdite sur ce commerce",
+      });
+    }
+
     return res.json({
       ok: true,
       message: shouldArchive
@@ -306,7 +331,7 @@ router.patch("/:id/status", async (req, res) => {
   }
 });
 
-router.patch("/:id/restore", async (req, res) => {
+router.patch("/:id/restore", requireAuth, async (req, res) => {
   try {
     const booking = await updateBookingStatus(req.params.id, {
       status: "pending",
@@ -320,6 +345,13 @@ router.patch("/:id/restore", async (req, res) => {
       return res.status(404).json({
         ok: false,
         error: "Réservation introuvable",
+      });
+    }
+
+    if (!isSameBusiness(req, booking.businessId || booking.merchantId)) {
+      return res.status(403).json({
+        ok: false,
+        error: "Action interdite sur ce commerce",
       });
     }
 
@@ -337,9 +369,11 @@ router.patch("/:id/restore", async (req, res) => {
   }
 });
 
-router.patch("/:id/propose-slot", async (req, res) => {
+router.patch("/:id/propose-slot", requireAuth, async (req, res) => {
   try {
-    const { proposedDate = "", proposedTime = "", merchantResponse = "" } = req.body;
+    const proposedDate = normalizeText(req.body.proposedDate);
+    const proposedTime = normalizeText(req.body.proposedTime);
+    const merchantResponse = normalizeText(req.body.merchantResponse);
 
     const booking = await updateBookingStatus(req.params.id, {
       status: "confirmed",
@@ -356,6 +390,13 @@ router.patch("/:id/propose-slot", async (req, res) => {
       return res.status(404).json({
         ok: false,
         error: "Réservation introuvable",
+      });
+    }
+
+    if (!isSameBusiness(req, booking.businessId || booking.merchantId)) {
+      return res.status(403).json({
+        ok: false,
+        error: "Action interdite sur ce commerce",
       });
     }
 
