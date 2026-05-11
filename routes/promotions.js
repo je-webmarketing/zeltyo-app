@@ -55,4 +55,66 @@ router.post("/", async (req, res) => {
   }
 });
 
+router.patch("/:id/status", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+
+    const promotions = await getAllPromotions();
+
+    const updated = promotions.map((promo) =>
+      promo.id === id
+        ? {
+            ...promo,
+            status,
+          }
+        : promo
+    );
+
+    await saveAllPromotions(updated);
+
+    return res.json({
+      ok: true,
+    });
+  } catch (error) {
+    console.error("Erreur update status promo :", error);
+
+    return res.status(500).json({
+      ok: false,
+      error: "Erreur serveur",
+    });
+  }
+});
+
+router.patch("/:id/archive", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const promotions = await getAllPromotions();
+
+    const updated = promotions.map((promo) =>
+      promo.id === id
+        ? {
+            ...promo,
+            status: "Archivée",
+            archivedAt: new Date().toISOString(),
+          }
+        : promo
+    );
+
+    await saveAllPromotions(updated);
+
+    return res.json({
+      ok: true,
+    });
+  } catch (error) {
+    console.error("Erreur archive promo :", error);
+
+    return res.status(500).json({
+      ok: false,
+      error: "Erreur serveur",
+    });
+  }
+});
+
 export default router;
