@@ -2,38 +2,35 @@ import express from "express";
 
 import {
   getAllPromotions,
+  saveAllPromotions,
   addPromotion,
 } from "../services/promotionStore.js";
 
 const router = express.Router();
 
+const ACTIVE_STATUSES = ["active", "actif", ""];
+
 router.get("/public/:businessId", async (req, res) => {
   try {
     const { businessId } = req.params;
-
     const promotions = await getAllPromotions();
-
     const now = new Date();
 
-const filtered = promotions.filter((promo) => {
-  const status = String(promo.status || "").toLowerCase();
+    const filtered = promotions.filter((promo) => {
+      const status = String(promo.status || "").toLowerCase();
 
-  const validUntil = promo.validUntil
-    ? new Date(promo.validUntil)
-    : null;
+      const validUntil = promo.validUntil
+        ? new Date(promo.validUntil)
+        : null;
 
-  const isExpired = validUntil && validUntil < now;
+      const isExpired = validUntil && validUntil < now;
 
-  return (
-    promo.businessId === businessId &&
-    !isExpired &&
-    (
-      status === "active" ||
-      status === "actif" ||
-      status === ""
-    )
-  );
-});
+      return (
+        String(promo.businessId) === String(businessId) &&
+        !isExpired &&
+        ACTIVE_STATUSES.includes(status)
+      );
+    });
 
     return res.json({
       ok: true,
@@ -78,82 +75,39 @@ router.patch("/:id/status", async (req, res) => {
     const { id } = req.params;
     const { status } = req.body;
 
-    const promotions = await getAllPromotions();
+    const allowedStatuses = ["Active", "Pause", "Archivée"];
 
-    const updated = promotions.map((promo) =>
-      promo.id === id
-        ? {
-            ...promo,
-            status,
-          }
-        : promo
-    );
-
-    await saveAllPromotions(updated);
-
-    return res.json({
-      ok: true,
-    });
-  } catch (error) {
-    console.error("Erreur update status promo :", error);
-
-    return res.status(500).json({
-      ok: false,
-      error: "Erreur serveur",
-    });
-  }
-});
-
-router.patch("/:id/archive", async (req, res) => {
-  try {
-    const { id } = req.params;
+    if (status && !allowedStatuses.includes(status)) {
+      return res.status(400).json({
+        ok: false,
+        error: "Statut invalide",
+      });
+    }
 
     const promotions = await getAllPromotions();
 
-    const updated = promotions.map((promo) =>
-      promo.id === id
-        ? {
-            ...promo,
-            status: "Archivée",
-            archivedAt: new Date().toISOString(),
-          }
-        : promo
-    );
-
-    await saveAllPromotions(updated);
-
-    return res.json({
-      ok: true,
-    });
-  } catch (error) {
-    console.error("Erreur archive promo :", error);
-
-    return res.status(500).json({
-      ok: false,
-      error: "Erreur serveur",
-    });
-  }
-});
-
-router.patch("/:id/status", async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    const promotions = await getAllPromotions();
+    let found = false;
 
     const updated = promotions.map((promo) => {
       if (String(promo.id) !== String(id)) {
         return promo;
       }
 
+      found = true;
+
       return {
         ...promo,
-        status:
-          promo.status === "Active"
-            ? "Pause"
-            : "Active",
+        status: status || (promo.status === "Active" ? "Pause" : "Active"),
+        updatedAt: new Date().toISOString(),
       };
     });
+
+    if (!found) {
+      return res.status(404).json({
+        ok: false,
+        error: "Promotion introuvable",
+      });
+    }
 
     await saveAllPromotions(updated);
 
@@ -173,20 +127,31 @@ router.patch("/:id/status", async (req, res) => {
 router.patch("/:id/archive", async (req, res) => {
   try {
     const { id } = req.params;
-
     const promotions = await getAllPromotions();
+
+    let found = false;
 
     const updated = promotions.map((promo) => {
       if (String(promo.id) !== String(id)) {
         return promo;
       }
 
+      found = true;
+
       return {
         ...promo,
         status: "Archivée",
         archivedAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
       };
     });
+
+    if (!found) {
+      return res.status(404).json({
+        ok: false,
+        error: "Promotion introuvable",
+      });
+    }
 
     await saveAllPromotions(updated);
 
