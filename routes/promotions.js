@@ -13,9 +13,27 @@ router.get("/public/:businessId", async (req, res) => {
 
     const promotions = await getAllPromotions();
 
-    const filtered = promotions.filter(
-      (promo) => promo.businessId === businessId
-    );
+    const now = new Date();
+
+const filtered = promotions.filter((promo) => {
+  const status = String(promo.status || "").toLowerCase();
+
+  const validUntil = promo.validUntil
+    ? new Date(promo.validUntil)
+    : null;
+
+  const isExpired = validUntil && validUntil < now;
+
+  return (
+    promo.businessId === businessId &&
+    !isExpired &&
+    (
+      status === "active" ||
+      status === "actif" ||
+      status === ""
+    )
+  );
+});
 
     return res.json({
       ok: true,
