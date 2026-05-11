@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
     updateBookingStatus,
 } from "../lib/bookingsApi";
-import { buildApiUrl } from "../config/api";
+import { authFetch } from "../config/api";
 
 const COLORS = {
   bg: "#050505",
@@ -121,7 +121,7 @@ async function loadBookings() {
         ? `/bookings/archived/${businessId}`
         : `/bookings/by-business/${businessId}`;
 
-    const response = await fetch(buildApiUrl(endpoint));
+    const response = await authFetch(endpoint);
     const data = await response.json();
 
     if (!response.ok || !data.ok) {
@@ -166,7 +166,7 @@ async function handleStatusChange(bookingId, status) {
     setError("");
     setSuccess("");
 
-    const response = await fetch(buildApiUrl(`/bookings/${bookingId}/status`), {
+    const response = await authFetch(`/bookings/${bookingId}/status`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status }),
@@ -200,8 +200,8 @@ async function handleProposeSlot(bookingId) {
   try {
     setActionId(bookingId);
 
-    const response = await fetch(
-      buildApiUrl(`/bookings/${bookingId}/propose-slot`),
+    const response = await authFetch(
+  `/bookings/${bookingId}/propose-slot`,
       {
         method: "PATCH",
         headers: {
@@ -241,7 +241,7 @@ async function handleRestore(bookingId) {
     setError("");
     setSuccess("");
 
-    const response = await fetch(buildApiUrl(`/bookings/${bookingId}/restore`), {
+    const response = await authFetch(`/bookings/${bookingId}/restore`, {
       method: "PATCH",
     });
 
