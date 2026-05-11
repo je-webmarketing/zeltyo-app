@@ -135,4 +135,72 @@ router.patch("/:id/archive", async (req, res) => {
   }
 });
 
+router.patch("/:id/status", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const promotions = await getAllPromotions();
+
+    const updated = promotions.map((promo) => {
+      if (String(promo.id) !== String(id)) {
+        return promo;
+      }
+
+      return {
+        ...promo,
+        status:
+          promo.status === "Active"
+            ? "Pause"
+            : "Active",
+      };
+    });
+
+    await saveAllPromotions(updated);
+
+    return res.json({
+      ok: true,
+    });
+  } catch (error) {
+    console.error("Erreur PATCH status promotion :", error);
+
+    return res.status(500).json({
+      ok: false,
+      error: "Erreur serveur",
+    });
+  }
+});
+
+router.patch("/:id/archive", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const promotions = await getAllPromotions();
+
+    const updated = promotions.map((promo) => {
+      if (String(promo.id) !== String(id)) {
+        return promo;
+      }
+
+      return {
+        ...promo,
+        status: "Archivée",
+        archivedAt: new Date().toISOString(),
+      };
+    });
+
+    await saveAllPromotions(updated);
+
+    return res.json({
+      ok: true,
+    });
+  } catch (error) {
+    console.error("Erreur archive promotion :", error);
+
+    return res.status(500).json({
+      ok: false,
+      error: "Erreur serveur",
+    });
+  }
+});
+
 export default router;
