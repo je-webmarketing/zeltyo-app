@@ -2,7 +2,20 @@ import { useEffect, useMemo, useState } from "react";
 import {
     updateBookingStatus,
 } from "../lib/bookingsApi";
-import { authFetch } from "../config/api";
+import { buildApiUrl } from "../config/api";
+
+function authFetch(path, options = {}) {
+  const rawAuth = localStorage.getItem("zeltyo_merchant_auth");
+  const token = rawAuth ? JSON.parse(rawAuth)?.token : "";
+
+  return fetch(buildApiUrl(path), {
+    ...options,
+    headers: {
+      ...(options.headers || {}),
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
 
 const COLORS = {
   bg: "#050505",
