@@ -14,7 +14,7 @@ import {
   requireAuth,
   requireRole,
   requireBusinessAccess,
-} from "../middleware/auth.js";
+} from "../middleware/requireAuth.js";
 
 console.log("✅ routes/bookings.js chargé");
 
