@@ -21,6 +21,7 @@ export function requireAuth(req, res, next) {
     req.user = user;
     next();
   } catch (error) {
+    console.error("❌ JWT verify failed:", error.message);
     return res.status(401).json({
       ok: false,
       error: "Session invalide ou expirée",

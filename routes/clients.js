@@ -36,6 +36,7 @@ function cleanPhone(value) {
 }
 
 router.get("/", requireAuth, requireRole("admin", "merchant_admin"), async (req, res) => {
+  console.log("✅ GET /clients autorisé pour :", req.user);
   try {
     const clients = await getAllClients();
     return res.json({ ok: true, clients });
