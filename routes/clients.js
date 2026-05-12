@@ -7,7 +7,7 @@ import {
   saveAllClients,
 } from "../services/clientStore.js";
 import { sendNotificationToSubscription } from "../services/onesignal.js";
-import { requireAuth, requireRole } from "../middleware/auth.js";
+import { requireAuth, requireRole } from "../middleware/requireAuth.js";
 
 const router = express.Router();
 
