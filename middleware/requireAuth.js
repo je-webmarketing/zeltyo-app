@@ -41,3 +41,31 @@ export function requireRole(...roles) {
     next();
   };
 }
+
+export function requireBusinessAccess(req, res, next) {
+  if (!req.user) {
+    return res.status(401).json({
+      ok: false,
+      error: "Utilisateur non authentifié",
+    });
+  }
+
+  const requestedBusinessId =
+    req.params.businessId ||
+    req.params.id ||
+    req.body.businessId ||
+    req.query.businessId;
+
+  if (!requestedBusinessId) {
+    return next();
+  }
+
+  if (req.user.businessId !== requestedBusinessId) {
+    return res.status(403).json({
+      ok: false,
+      error: "Accès interdit à ce commerce",
+    });
+  }
+
+  return next();
+}
