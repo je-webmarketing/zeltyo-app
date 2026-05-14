@@ -1,35 +1,54 @@
-import { db } from "./firebaseAdmin.js";
+import { createClient } from "@supabase/supabase-js";
 
-const isFirestoreReady = !!db;
-const COLLECTION_NAME = "clients";
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+const supabase =
+  SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY
+    ? createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+    : null;
 
 let localClients = [];
 
-function getCollection() {
-  if (!db) return null;
-  return db.collection(COLLECTION_NAME);
-}
-
-function normalizeClient(client = {}) {
-  const fallbackId = `CL-${Date.now()}`;
-
+function toDb(client) {
   return {
-    id: client.id || fallbackId,
-    loyaltyId: client.loyaltyId || client.id || fallbackId,
+    id: client.id,
+    loyalty_id: client.loyaltyId,
     name: client.name || "",
     email: client.email || "",
     phone: client.phone || "",
-    subscriptionId: client.subscriptionId || "",
+    subscription_id: client.subscriptionId || "",
     visits: Number(client.visits || 0),
     points: Number(client.points || 0),
-    totalSpent: Number(client.totalSpent || 0),
-    rewardsAvailable: Number(client.rewardsAvailable || 0),
-    rewardGoal: Number(client.rewardGoal || 10),
-    rewardNotified: Boolean(client.rewardNotified || false),
+    total_spent: Number(client.totalSpent || 0),
+    rewards_available: Number(client.rewardsAvailable || 0),
+    reward_goal: Number(client.rewardGoal || 10),
+    reward_notified: Boolean(client.rewardNotified || false),
     segment: client.segment || "new",
-    lastVisitAt: client.lastVisitAt || null,
-    createdAt: client.createdAt || new Date().toISOString(),
-    updatedAt: client.updatedAt || new Date().toISOString(),
+    last_visit_at: client.lastVisitAt || null,
+    created_at: client.createdAt || new Date().toISOString(),
+    updated_at: client.updatedAt || new Date().toISOString(),
+  };
+}
+
+function fromDb(row) {
+  return {
+    id: row.id,
+    loyaltyId: row.loyalty_id,
+    name: row.name || "",
+    email: row.email || "",
+    phone: row.phone || "",
+    subscriptionId: row.subscription_id || "",
+    visits: Number(row.visits || 0),
+    points: Number(row.points || 0),
+    totalSpent: Number(row.total_spent || 0),
+    rewardsAvailable: Number(row.rewards_available || 0),
+    rewardGoal: Number(row.reward_goal || 10),
+    rewardNotified: Boolean(row.reward_notified || false),
+    segment: row.segment || "new",
+    lastVisitAt: row.last_visit_at,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
   };
 }
 
@@ -38,133 +57,83 @@ function computeSegment(client) {
   const points = Number(client.points || 0);
   const totalSpent = Number(client.totalSpent || 0);
 
-  if (points >= 20 || visits >= 10 || totalSpent >= 500) {
-    return "vip";
-  }
-
-  if (points >= 8 || visits >= 4 || totalSpent >= 120) {
-    return "loyal";
-  }
-
+  if (points >= 20 || visits >= 10 || totalSpent >= 500) return "vip";
+  if (points >= 8 || visits >= 4 || totalSpent >= 120) return "loyal";
   return "new";
 }
 
-function enrichClient(client) {
-  const normalized = normalizeClient(client);
-  const rewardGoal = Number(normalized.rewardGoal || 10);
-  const rewardsAvailable = Math.floor(normalized.points / rewardGoal);
+function enrichClient(client = {}) {
+  const fallbackId = client.id || `CL-${Date.now()}`;
+  const rewardGoal = Number(client.rewardGoal || 10);
+  const points = Number(client.points || 0);
+
+  const normalized = {
+    id: fallbackId,
+    loyaltyId: client.loyaltyId || fallbackId,
+    name: client.name || "",
+    email: client.email || "",
+    phone: client.phone || "",
+    subscriptionId: client.subscriptionId || "",
+    visits: Number(client.visits || 0),
+    points,
+    totalSpent: Number(client.totalSpent || 0),
+    rewardGoal,
+    rewardNotified: Boolean(client.rewardNotified || false),
+    lastVisitAt: client.lastVisitAt || null,
+    createdAt: client.createdAt || new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
 
   return {
     ...normalized,
-    rewardGoal,
-    rewardsAvailable,
+    rewardsAvailable: Math.floor(points / rewardGoal),
     segment: computeSegment(normalized),
   };
 }
 
 export async function getAllClients() {
-  if (!isFirestoreReady) {
-    console.log("⚠️ Mode local → clients local memory");
-    return localClients.map((client) => enrichClient(client));
+  if (!supabase) {
+    return localClients.map(enrichClient);
   }
 
-  const collection = getCollection();
-  const snapshot = await collection.get();
+  const { data, error } = await supabase
+    .from("clients")
+    .select("*")
+    .order("created_at", { ascending: false });
 
-  return snapshot.docs.map((doc) =>
-    enrichClient({
-      id: doc.id,
-      ...doc.data(),
-    })
-  );
+  if (error) throw error;
+
+  return (data || []).map(fromDb).map(enrichClient);
 }
 
 export async function saveAllClients(clients = []) {
   const prepared = clients.map(enrichClient);
-  const collection = getCollection();
 
-  if (!collection) {
+  if (!supabase) {
     localClients = prepared;
     return prepared;
   }
 
-  const snapshot = await collection.get();
-  const batch = db.batch();
+  const { error } = await supabase
+    .from("clients")
+    .upsert(prepared.map(toDb), { onConflict: "id" });
 
-  snapshot.docs.forEach((doc) => {
-    batch.delete(doc.ref);
-  });
+  if (error) throw error;
 
-  prepared.forEach((client) => {
-    const ref = collection.doc(client.id);
-    batch.set(ref, client);
-  });
-
-  await batch.commit();
   return prepared;
 }
 
 export async function upsertClient(clientData = {}) {
-  const collection = getCollection();
+  const clients = await getAllClients();
 
-  if (!collection) {
-    const normalizedPhone = String(clientData.phone || "").trim();
-    const normalizedEmail = String(clientData.email || "")
-      .trim()
-      .toLowerCase();
+  const phone = String(clientData.phone || "").trim();
+  const email = String(clientData.email || "").trim().toLowerCase();
 
-    const existingIndex = localClients.findIndex((client) => {
-      const clientPhone = String(client.phone || "").trim();
-      const clientEmail = String(client.email || "").trim().toLowerCase();
-
-      return (
-        (clientData.id && client.id === clientData.id) ||
-        (normalizedPhone && clientPhone === normalizedPhone) ||
-        (normalizedEmail && clientEmail === normalizedEmail)
-      );
-    });
-
-    const fallbackId = clientData.id || `CL-${Date.now()}`;
-
-    const base =
-      existingIndex >= 0
-        ? localClients[existingIndex]
-        : {
-            id: fallbackId,
-            loyaltyId: clientData.loyaltyId || fallbackId,
-            createdAt: new Date().toISOString(),
-          };
-
-    const updated = enrichClient({
-      ...base,
-      ...clientData,
-      updatedAt: new Date().toISOString(),
-    });
-
-    if (existingIndex >= 0) {
-      localClients[existingIndex] = updated;
-    } else {
-      localClients.push(updated);
-    }
-
-    return updated;
-  }
-
-  const allClients = await getAllClients();
-
-  const normalizedPhone = String(clientData.phone || "").trim();
-  const normalizedEmail = String(clientData.email || "")
-    .trim()
-    .toLowerCase();
-
-  const existing = allClients.find((client) => {
-    const clientPhone = String(client.phone || "").trim();
-    const clientEmail = String(client.email || "").trim().toLowerCase();
-
+  const existing = clients.find((client) => {
     return (
       (clientData.id && client.id === clientData.id) ||
-      (normalizedPhone && clientPhone === normalizedPhone) ||
-      (normalizedEmail && clientEmail === normalizedEmail)
+      (phone && String(client.phone || "").trim() === phone) ||
+      (email && String(client.email || "").trim().toLowerCase() === email)
     );
   });
 
@@ -176,17 +145,28 @@ export async function upsertClient(clientData = {}) {
     id: existing?.id || fallbackId,
     loyaltyId: existing?.loyaltyId || clientData.loyaltyId || fallbackId,
     createdAt: existing?.createdAt || new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
   });
 
-  await collection.doc(merged.id).set(merged, { merge: true });
+  if (!supabase) {
+    localClients = existing
+      ? localClients.map((client) => (client.id === existing.id ? merged : client))
+      : [...localClients, merged];
+
+    return merged;
+  }
+
+  const { error } = await supabase
+    .from("clients")
+    .upsert(toDb(merged), { onConflict: "id" });
+
+  if (error) throw error;
 
   return merged;
 }
 
 export async function refreshClientSegments() {
   const clients = await getAllClients();
-  const refreshed = clients.map((client) => enrichClient(client));
+  const refreshed = clients.map(enrichClient);
   await saveAllClients(refreshed);
   return refreshed;
 }
