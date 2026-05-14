@@ -1,5 +1,5 @@
 import express from "express";
-
+import { sendPushNotification } from "../services/onesignal.js";
 import {
   getAllPromotions,
   saveAllPromotions,
@@ -55,6 +55,22 @@ router.post("/", async (req, res) => {
     };
 
     await addPromotion(promotion);
+
+    try {
+      await sendPushNotification({
+        headings: {
+          fr: "🎁 Nouvelle offre disponible",
+        },
+        contents: {
+          fr: `${promotion.title || "Une nouvelle promotion"} est disponible près de vous.`,
+        },
+        included_segments: ["Subscribed Users"],
+      });
+
+      console.log("✅ Push promotion envoyé");
+    } catch (pushError) {
+      console.error("❌ Erreur push promotion :", pushError);
+    }
 
     return res.json({
       ok: true,
