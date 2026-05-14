@@ -187,7 +187,7 @@ router.get(
 router.post(
   "/visit",
   requireAuth,
-  requireRole("admin", "merchant_admin", "merchant_employee", "employee")
+  requireRole("admin", "merchant_admin", "merchant_employee", "employee"),
   async (req, res) => {
     try {
       const id = clean(req.body.id);
