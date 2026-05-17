@@ -16,6 +16,7 @@ import bookingsRouter from "./routes/bookings.js";
 import menuRouter from "./routes/menu.js";
 import stripeRoutes from "./routes/stripe.js";
 import promotionsRouter from "./routes/promotions.js";
+import businessesRouter from "./routes/businesses.js";
 
 dotenv.config();
 
@@ -112,6 +113,7 @@ app.use("/auth", authRoutes);
 app.use("/notifications-advanced", notificationsAdvanced);
 app.use("/notifications", notificationsRouter);
 app.use("/automation", automationRoutes);
+app.use("/businesses", businessesRouter);
 app.use("/clients", clientsRouter);
 app.use("/bookings", bookingsRouter);
 app.use("/menu", menuRouter);
