@@ -113,6 +113,7 @@ app.use("/auth", authRoutes);
 app.use("/notifications-advanced", notificationsAdvanced);
 app.use("/notifications", notificationsRouter);
 app.use("/automation", automationRoutes);
+console.log("✅ businessesRouter mounted");
 app.use("/businesses", businessesRouter);
 app.use("/clients", clientsRouter);
 app.use("/bookings", bookingsRouter);
