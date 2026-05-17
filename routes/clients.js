@@ -35,7 +35,7 @@ function cleanPhone(value) {
   return clean(value).replace(/\s/g, "");
 }
 
-router.get("/", requireAuth, requireRole("admin", "merchant_admin"), async (req, res) => {
+router.get("/", requireAuth, requireRole("admin", "merchant_admin", "merchant_employee", "employee"), async (req, res) => {
   console.log("✅ GET /clients autorisé pour :", req.user);
   try {
     const clients = await getAllClients();
