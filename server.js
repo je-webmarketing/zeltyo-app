@@ -158,6 +158,13 @@ cron.schedule("0 10 * * *", async () => {
   }
 });
 
+app.get("/debug-business", (req, res) => {
+  res.json({
+    ok: true,
+    message: "business route loaded",
+  });
+});
+
 app.use((req, res) => {
   return res.status(404).json({
     ok: false,
