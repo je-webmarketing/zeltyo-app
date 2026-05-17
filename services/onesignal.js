@@ -60,3 +60,5 @@ export async function sendNotificationToSubscription(subscriptionId, message) {
     return { ok: false, error: err.message };
   }
 }
+
+export const sendPushNotification = sendPush;
