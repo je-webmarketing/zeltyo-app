@@ -4,6 +4,7 @@ import {
   getOneSignalStatus,
   enableOneSignalNotifications,
 } from "./lib/onesignal";
+import { buildApiUrl } from "./config/api";
 
 export default function ClientApp() {
   const [selectedZone, setSelectedZone] = useState("Genève");
@@ -14,6 +15,8 @@ export default function ClientApp() {
   const [permission, setPermission] = useState(false);
   const [optedIn, setOptedIn] = useState(false);
   const [subscriptionId, setSubscriptionId] = useState(null);
+ const [clients, setClients] = useState([]);
+const [currentClientId] = useState("client-demo-1"); 
 
   useEffect(() => {
     const handler = (e) => {
@@ -55,6 +58,24 @@ export default function ClientApp() {
     };
   }, []);
 
+  useEffect(() => {
+  async function loadClients() {
+    try {
+      const response = await fetch(buildApiUrl("/clients"));
+
+      const data = await response.json();
+
+      if (data.ok && Array.isArray(data.clients)) {
+        setClients(data.clients);
+      }
+    } catch (error) {
+      console.error("Erreur chargement clients :", error);
+    }
+  }
+
+  loadClients();
+}, []);
+
   const zones = ["Genève", "Lausanne", "Lyon"];
 
   const businesses = [
@@ -89,9 +110,16 @@ export default function ClientApp() {
     visibleBusinesses.find((b) => b.id === selectedBusinessId) ||
     visibleBusinesses[0];
 
-  const progress = selectedBusiness
-    ? (selectedBusiness.points / selectedBusiness.rewardGoal) * 100
-    : 0;
+  const currentClient = clients.find(
+  (c) => c.id === currentClientId
+);
+
+const currentPoints =
+  Number(currentClient?.points || 0);
+
+const progress = selectedBusiness
+  ? (currentPoints / selectedBusiness.rewardGoal) * 100
+  : 0;
 
   if (!selectedBusiness) return <div>Aucun commerce</div>;
 
@@ -175,7 +203,7 @@ export default function ClientApp() {
           borderRadius: 12,
         }}
       >
-        {selectedBusiness.points} / {selectedBusiness.rewardGoal} points
+        {currentPoints} / {selectedBusiness.rewardGoal} points
       </div>
 
       <div style={{ marginTop: 10 }}>
