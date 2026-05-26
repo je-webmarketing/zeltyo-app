@@ -8,6 +8,7 @@ import {
   purgeOldBookings,
   clearAllBookings,
   getAllBookings,
+  getBookingById,
 } from "../services/bookingStore.js";
 
 import {
@@ -288,7 +289,29 @@ router.patch("/:id/status", requireAuth, async (req, res) => {
       });
     }
 
-    const shouldArchive = status === "cancelled" || status === "completed";
+    const existingBooking = await getBookingById(req.params.id);
+
+    if (!existingBooking) {
+      return res.status(404).json({
+        ok: false,
+        error: "Réservation introuvable",
+      });
+    }
+
+    if (
+      !isSameBusiness(
+        req,
+        existingBooking.businessId || existingBooking.merchantId
+      )
+    ) {
+      return res.status(403).json({
+        ok: false,
+        error: "Action interdite sur ce commerce",
+      });
+    }
+
+    const shouldArchive =
+      status === "cancelled" || status === "completed";
 
     const booking = await updateBookingStatus(req.params.id, {
       status,
@@ -296,24 +319,12 @@ router.patch("/:id/status", requireAuth, async (req, res) => {
       proposedDate,
       proposedTime,
       archived: shouldArchive,
-      archivedAt: shouldArchive ? new Date().toISOString() : null,
+      archivedAt: shouldArchive
+        ? new Date().toISOString()
+        : null,
       updatedAt: new Date().toISOString(),
       responseAt: new Date().toISOString(),
     });
-
-    if (!booking) {
-      return res.status(404).json({
-        ok: false,
-        error: "Réservation introuvable",
-      });
-    }
-
-    if (!isSameBusiness(req, booking.businessId || booking.merchantId)) {
-      return res.status(403).json({
-        ok: false,
-        error: "Action interdite sur ce commerce",
-      });
-    }
 
     return res.json({
       ok: true,
@@ -324,6 +335,7 @@ router.patch("/:id/status", requireAuth, async (req, res) => {
     });
   } catch (error) {
     console.error("Erreur PATCH /bookings/:id/status :", error);
+
     return res.status(500).json({
       ok: false,
       error: "Erreur mise à jour statut",

@@ -173,6 +173,21 @@ export async function getBookingsByClientId(clientId) {
     .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 }
 
+export async function getBookingById(bookingId) {
+  const targetId = String(bookingId || "").trim();
+
+  if (!targetId) return null;
+
+  const allBookings = await getAllBookings();
+
+  return (
+    allBookings.find(
+      (booking) =>
+        String(booking.id || "").trim() === targetId
+    ) || null
+  );
+}
+
 export async function updateBookingStatus(bookingId, updates = {}) {
   const now = new Date().toISOString();
   const collection = getCollection();
