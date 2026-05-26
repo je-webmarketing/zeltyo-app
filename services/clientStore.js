@@ -14,6 +14,7 @@ function toDb(client) {
   return {
     id: client.id,
     loyalty_id: client.loyaltyId,
+    business_id: client.businessId || "",
     name: client.name || "",
     email: client.email || "",
     phone: client.phone || "",
@@ -35,6 +36,7 @@ function fromDb(row) {
   return {
     id: row.id,
     loyaltyId: row.loyalty_id,
+    businessId: row.business_id || "",
     name: row.name || "",
     email: row.email || "",
     phone: row.phone || "",
@@ -70,6 +72,7 @@ function enrichClient(client = {}) {
   const normalized = {
     id: fallbackId,
     loyaltyId: client.loyaltyId || fallbackId,
+    businessId: client.businessId || "",
     name: client.name || "",
     email: client.email || "",
     phone: client.phone || "",
@@ -129,13 +132,19 @@ export async function upsertClient(clientData = {}) {
   const phone = String(clientData.phone || "").trim();
   const email = String(clientData.email || "").trim().toLowerCase();
 
-  const existing = clients.find((client) => {
-    return (
-      (clientData.id && client.id === clientData.id) ||
-      (phone && String(client.phone || "").trim() === phone) ||
-      (email && String(client.email || "").trim().toLowerCase() === email)
-    );
-  });
+  const businessId = String(clientData.businessId || "");
+
+const existing = clients.find((client) => {
+  const sameIdentity =
+    (clientData.id && client.id === clientData.id) ||
+    (phone && String(client.phone || "").trim() === phone) ||
+    (email && String(client.email || "").trim().toLowerCase() === email);
+
+  const sameBusiness =
+    String(client.businessId || "") === businessId;
+
+  return sameIdentity && sameBusiness;
+});
 
   const fallbackId = clientData.id || `CL-${Date.now()}`;
 
