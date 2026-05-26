@@ -35,16 +35,48 @@ function cleanPhone(value) {
   return clean(value).replace(/\s/g, "");
 }
 
-router.get("/", requireAuth, requireRole("admin", "merchant_admin", "merchant_employee", "employee"), async (req, res) => {
-  console.log("✅ GET /clients autorisé pour :", req.user);
-  try {
-    const clients = await getAllClients();
-    return res.json({ ok: true, clients });
-  } catch (error) {
-    console.error("Erreur GET /clients :", error);
-    return res.status(500).json({ ok: false, error: "Erreur récupération clients" });
+function getUserBusinessId(req) {
+  return clean(req.user?.businessId);
+}
+
+function getBodyBusinessId(req) {
+  return clean(req.body?.businessId);
+}
+
+function sameBusiness(client, businessId) {
+  return String(client?.businessId || client?.business_id || "") === String(businessId || "");
+}
+
+function filterClientsByBusiness(clients, req) {
+  const businessId = getUserBusinessId(req);
+
+  if (!businessId) return [];
+
+  return clients.filter((client) => sameBusiness(client, businessId));
+}
+
+router.get(
+  "/",
+  requireAuth,
+  requireRole("admin", "merchant_admin", "merchant_employee", "employee"),
+  async (req, res) => {
+    try {
+      const allClients = await getAllClients();
+      const clients = filterClientsByBusiness(allClients, req);
+
+      return res.json({
+        ok: true,
+        clients,
+      });
+    } catch (error) {
+      console.error("Erreur GET /clients :", error);
+      return res.status(500).json({
+        ok: false,
+        error: "Erreur récupération clients",
+      });
+    }
   }
-});
+);
 
 router.get("/__debug", blockProduction, async (req, res) => {
   return res.json({
@@ -56,18 +88,37 @@ router.get("/__debug", blockProduction, async (req, res) => {
 router.get("/by-loyalty/:value", async (req, res) => {
   try {
     const value = clean(req.params.value);
+    const businessId = clean(req.query.businessId);
+
     const clients = await getAllClients();
 
-    const client = clients.find((c) => c.loyaltyId === value || c.id === value);
+    const client = clients.find((c) => {
+      const matchIdentity = c.loyaltyId === value || c.id === value;
+
+      if (!matchIdentity) return false;
+
+      if (!businessId) return true;
+
+      return sameBusiness(c, businessId);
+    });
 
     if (!client) {
-      return res.status(404).json({ ok: false, error: "Client introuvable" });
+      return res.status(404).json({
+        ok: false,
+        error: "Client introuvable",
+      });
     }
 
-    return res.json({ ok: true, client });
+    return res.json({
+      ok: true,
+      client,
+    });
   } catch (error) {
     console.error("Erreur GET /clients/by-loyalty/:value :", error);
-    return res.status(500).json({ ok: false, error: "Erreur récupération client" });
+    return res.status(500).json({
+      ok: false,
+      error: "Erreur récupération client",
+    });
   }
 });
 
@@ -78,6 +129,14 @@ router.post("/", async (req, res) => {
     const name = clean(req.body.name);
     const email = cleanEmail(req.body.email);
     const phone = cleanPhone(req.body.phone);
+    const businessId = getBodyBusinessId(req) || getUserBusinessId(req);
+
+    if (!businessId) {
+      return res.status(400).json({
+        ok: false,
+        error: "businessId obligatoire",
+      });
+    }
 
     if (!name || (!phone && !email)) {
       return res.status(400).json({
@@ -92,19 +151,24 @@ router.post("/", async (req, res) => {
       const cPhone = cleanPhone(c.phone);
       const cEmail = cleanEmail(c.email);
 
-      return (
+      const sameIdentity =
         (id && c.id === id) ||
         (phone && cPhone === phone) ||
-        (email && cEmail === email)
-      );
+        (email && cEmail === email);
+
+      return sameIdentity && sameBusiness(c, businessId);
     });
 
     await upsertClient({
       id: existingClient?.id || id || crypto.randomUUID(),
       loyaltyId: existingClient?.loyaltyId || loyaltyId || `CL-${Date.now()}`,
+      businessId,
       name,
       email,
       phone,
+      points: Number(existingClient?.points || 0),
+      visits: Number(existingClient?.visits || 0),
+      rewardsAvailable: Number(existingClient?.rewardsAvailable || 0),
       createdAt: existingClient?.createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     });
@@ -115,11 +179,13 @@ router.post("/", async (req, res) => {
       const cPhone = cleanPhone(c.phone);
       const cEmail = cleanEmail(c.email);
 
-      return (
+      const sameIdentity =
         (existingClient?.id && c.id === existingClient.id) ||
+        (id && c.id === id) ||
         (phone && cPhone === phone) ||
-        (email && cEmail === email)
-      );
+        (email && cEmail === email);
+
+      return sameIdentity && sameBusiness(c, businessId);
     });
 
     return res.status(existingClient ? 200 : 201).json({
@@ -132,7 +198,10 @@ router.post("/", async (req, res) => {
     });
   } catch (error) {
     console.error("Erreur POST /clients :", error);
-    return res.status(500).json({ ok: false, error: "Erreur création client" });
+    return res.status(500).json({
+      ok: false,
+      error: "Erreur création client",
+    });
   }
 });
 
@@ -142,6 +211,7 @@ router.post("/register-subscription", async (req, res) => {
     const name = clean(req.body.name);
     const phone = cleanPhone(req.body.phone);
     const subscriptionId = clean(req.body.subscriptionId);
+    const businessId = getBodyBusinessId(req);
 
     if (!subscriptionId || (!id && !phone)) {
       return res.status(400).json({
@@ -150,10 +220,18 @@ router.post("/register-subscription", async (req, res) => {
       });
     }
 
+    if (!businessId) {
+      return res.status(400).json({
+        ok: false,
+        error: "businessId obligatoire",
+      });
+    }
+
     const clients = await upsertClient({
       id,
       name,
       phone,
+      businessId,
       subscriptionId,
       updatedAt: new Date().toISOString(),
     });
@@ -161,11 +239,16 @@ router.post("/register-subscription", async (req, res) => {
     return res.json({
       ok: true,
       message: "Client enregistré",
-      clients,
+      clients: Array.isArray(clients)
+        ? clients.filter((client) => sameBusiness(client, businessId))
+        : clients,
     });
   } catch (error) {
     console.error("Erreur POST /clients/register-subscription :", error);
-    return res.status(500).json({ ok: false, error: "Erreur enregistrement client" });
+    return res.status(500).json({
+      ok: false,
+      error: "Erreur enregistrement client",
+    });
   }
 });
 
@@ -175,11 +258,19 @@ router.get(
   requireRole("admin", "merchant_admin"),
   async (req, res) => {
     try {
-      const clients = await refreshClientSegments();
-      return res.json({ ok: true, clients });
+      const refreshed = await refreshClientSegments();
+      const clients = filterClientsByBusiness(refreshed, req);
+
+      return res.json({
+        ok: true,
+        clients,
+      });
     } catch (error) {
       console.error("Erreur GET /clients/segments :", error);
-      return res.status(500).json({ ok: false, error: "Erreur segmentation clients" });
+      return res.status(500).json({
+        ok: false,
+        error: "Erreur segmentation clients",
+      });
     }
   }
 );
@@ -194,50 +285,79 @@ router.post(
       const phone = cleanPhone(req.body.phone);
       const amount = Number(req.body.amount || 0);
       const points = Number(req.body.points || 1);
+      const businessId = getUserBusinessId(req);
+
+      if (!businessId) {
+        return res.status(400).json({
+          ok: false,
+          error: "businessId manquant",
+        });
+      }
 
       if (!id && !phone) {
-        return res.status(400).json({ ok: false, error: "id ou phone obligatoire" });
+        return res.status(400).json({
+          ok: false,
+          error: "id ou phone obligatoire",
+        });
       }
 
       if (!Number.isFinite(points) || points < 0 || points > 20) {
-        return res.status(400).json({ ok: false, error: "Points invalides" });
+        return res.status(400).json({
+          ok: false,
+          error: "Points invalides",
+        });
       }
 
       const clients = await getAllClients();
-      const index = clients.findIndex((c) => c.id === id || (phone && cleanPhone(c.phone) === phone));
+
+      const index = clients.findIndex((c) => {
+        const sameIdentity = c.id === id || (phone && cleanPhone(c.phone) === phone);
+        return sameIdentity && sameBusiness(c, businessId);
+      });
 
       if (index === -1) {
-        return res.status(404).json({ ok: false, error: "Client introuvable" });
+        return res.status(404).json({
+          ok: false,
+          error: "Client introuvable pour ce commerce",
+        });
       }
 
       clients[index] = {
         ...clients[index],
-        visits: (clients[index].visits ?? 0) + 1,
-        points: (clients[index].points ?? 0) + points,
-        totalSpent: (clients[index].totalSpent ?? 0) + (Number.isFinite(amount) ? amount : 0),
+        businessId,
+        visits: Number(clients[index].visits ?? 0) + 1,
+        points: Number(clients[index].points ?? 0) + points,
+        totalSpent:
+          Number(clients[index].totalSpent ?? 0) +
+          (Number.isFinite(amount) ? amount : 0),
         lastVisitAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
 
       await saveAllClients(clients);
+
       const refreshed = await refreshClientSegments();
 
-      const updatedClient = refreshed.find(
-        (c) => c.id === id || (phone && cleanPhone(c.phone) === phone)
-      );
+      const updatedClient = refreshed.find((c) => {
+        const sameIdentity = c.id === id || (phone && cleanPhone(c.phone) === phone);
+        return sameIdentity && sameBusiness(c, businessId);
+      });
 
       if (updatedClient?.subscriptionId) {
         let message = null;
 
         if (
-          updatedClient.points >= (updatedClient.rewardGoal ?? 10) &&
+          Number(updatedClient.points || 0) >= Number(updatedClient.rewardGoal ?? 10) &&
           !updatedClient.rewardNotified
         ) {
           message = "Votre récompense est prête 🎁 Présentez-vous pour en profiter.";
           updatedClient.rewardNotified = true;
 
           const allClients = await getAllClients();
-          const updatedIndex = allClients.findIndex((c) => c.id === updatedClient.id);
+
+          const updatedIndex = allClients.findIndex(
+            (c) => c.id === updatedClient.id && sameBusiness(c, businessId)
+          );
 
           if (updatedIndex !== -1) {
             allClients[updatedIndex] = {
@@ -245,12 +365,15 @@ router.post(
               rewardNotified: true,
               updatedAt: new Date().toISOString(),
             };
+
             await saveAllClients(allClients);
           }
         } else if (updatedClient.segment === "loyal") {
-          message = "Merci pour votre fidélité 🙌 Encore quelques visites et une surprise vous attend.";
+          message =
+            "Merci pour votre fidélité 🙌 Encore quelques visites et une surprise vous attend.";
         } else if (updatedClient.segment === "vip") {
-          message = "Vous faites partie de nos meilleurs clients ⭐ Un bonus VIP vous attend.";
+          message =
+            "Vous faites partie de nos meilleurs clients ⭐ Un bonus VIP vous attend.";
         }
 
         if (message) {
@@ -259,7 +382,12 @@ router.post(
       }
 
       const finalClients = await getAllClients();
-      const finalClient = finalClients.find(
+
+      const businessClients = finalClients.filter((client) =>
+        sameBusiness(client, businessId)
+      );
+
+      const finalClient = businessClients.find(
         (c) => c.id === id || (phone && cleanPhone(c.phone) === phone)
       );
 
@@ -267,11 +395,14 @@ router.post(
         ok: true,
         message: "Visite enregistrée",
         client: finalClient || null,
-        clients: finalClients,
+        clients: businessClients,
       });
     } catch (error) {
       console.error("Erreur POST /clients/visit :", error);
-      return res.status(500).json({ ok: false, error: "Erreur enregistrement visite" });
+      return res.status(500).json({
+        ok: false,
+        error: "Erreur enregistrement visite",
+      });
     }
   }
 );
@@ -283,20 +414,40 @@ router.post(
   async (req, res) => {
     try {
       const phone = cleanPhone(req.body.phone);
+      const businessId = getUserBusinessId(req);
+
+      if (!businessId) {
+        return res.status(400).json({
+          ok: false,
+          error: "businessId manquant",
+        });
+      }
 
       if (!phone) {
-        return res.status(400).json({ ok: false, error: "phone obligatoire" });
+        return res.status(400).json({
+          ok: false,
+          error: "phone obligatoire",
+        });
       }
 
       const clients = await getAllClients();
-      const client = clients.find((c) => cleanPhone(c.phone) === phone);
+
+      const client = clients.find(
+        (c) => cleanPhone(c.phone) === phone && sameBusiness(c, businessId)
+      );
 
       if (!client) {
-        return res.status(404).json({ ok: false, error: "Client introuvable" });
+        return res.status(404).json({
+          ok: false,
+          error: "Client introuvable pour ce commerce",
+        });
       }
 
       if (!client.subscriptionId) {
-        return res.status(400).json({ ok: false, error: "subscriptionId manquant" });
+        return res.status(400).json({
+          ok: false,
+          error: "subscriptionId manquant",
+        });
       }
 
       await sendNotificationToSubscription(
@@ -311,11 +462,15 @@ router.post(
           id: client.id,
           name: client.name,
           phone: client.phone,
+          businessId: client.businessId,
         },
       });
     } catch (error) {
       console.error("Erreur POST /clients/relaunch :", error);
-      return res.status(500).json({ ok: false, error: "Erreur relance client" });
+      return res.status(500).json({
+        ok: false,
+        error: "Erreur relance client",
+      });
     }
   }
 );
