@@ -1,5 +1,6 @@
 import { useMemo, useState, useEffect } from "react";
 import { buildApiUrl } from "./config/api";
+import DashboardSection from "./components/DashboardSection";
 
 const STORAGE_AUTH = "zeltyo_merchant_auth";
 
@@ -1507,116 +1508,13 @@ const styles = {
 </div>
 
         {activeTab === "dashboard" && (
-          <>
-            <div style={styles.grid5}>
-              <StatCard label="Clients actifs" value={totalClients} />
-              <StatCard label="Points cumulés" value={totalPoints} />
-              <StatCard label="Visites enregistrées" value={totalVisits} />
-              <StatCard label="Récompenses disponibles" value={totalRewards} />
-              <StatCard label="Promotions actives" value={activePromos} />
-            </div>
-
-            <div style={styles.grid2}>
-              <div style={styles.card}>
-                <h3 style={styles.cardTitle}>Ajouter un client</h3>
-                <input
-                  style={styles.input}
-                  placeholder="Nom du client"
-                  value={newCustomer.name}
-                  onChange={(e) => setNewCustomer({ ...newCustomer, name: e.target.value })}
-                />
-                <input
-                  style={styles.input}
-                  placeholder="Email"
-                  value={newCustomer.email}
-                  onChange={(e) => setNewCustomer({ ...newCustomer, email: e.target.value })}
-                />
-                <input
-                  style={styles.input}
-                  placeholder="Téléphone"
-                  value={newCustomer.phone}
-                  onChange={(e) => setNewCustomer({ ...newCustomer, phone: e.target.value })}
-                />
-                <button style={styles.buttonFull} onClick={addCustomer}>
-                  Créer une carte fidélité
-                </button>
-                <p style={styles.helper}>
-                  Cette action est disponible pour l’équipe. L’administrateur pourra vérifier qui a ajouté chaque client dans l’onglet de contrôle.
-                </p>
-              </div>
-
-              <div style={styles.card}>
-                <h3 style={styles.cardTitle}>Valider une visite</h3>
-                <select style={styles.input} value={scanId} onChange={(e) => setScanId(e.target.value)}>
-                  {customers.map((customer) => (
-                    <option key={customer.id} value={customer.id}>
-                      {customer.name} — {customer.id}
-                    </option>
-                  ))}
-                </select>
-                <button style={styles.buttonFull} onClick={rewardVisit}>
-                  Ajouter 1 point après validation
-                </button>
-                <p style={styles.helper}>
-                  L’employé peut gérer la fidélité en caisse. Chaque validation remonte automatiquement dans le journal d’activité.
-                </p>
-              </div>
-            </div>
-
-            <div style={styles.grid3}>
-              <div style={styles.card}>
-                <h3 style={styles.sectionTitle}>Top clients fidélité</h3>
-                {topCustomers.map((customer) => (
-                  <div key={customer.id} style={styles.promoCard}>
-                    <div style={styles.rowBetween}>
-                      <strong>{customer.name}</strong>
-                      <span style={styles.badgeGreen}>{customer.tier}</span>
-                    </div>
-                    <div style={styles.kpiLine}>
-                      <div>Points : <strong>{customer.points}</strong></div>
-                      <div>Visites : <strong>{customer.visits}</strong></div>
-                      <div>Dernière visite : <strong>{customer.lastVisit}</strong></div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              <div style={styles.card}>
-                <h3 style={styles.cardTitle}>🔥 Clients à relancer</h3>
-                {clientsToRelance.length === 0 && <p style={styles.muted}>Aucun client à relancer pour le moment</p>}
-                {clientsToRelance.map((customer) => (
-                  <div key={customer.id} style={styles.promoCard}>
-                    <div style={styles.rowBetween}>
-                      <strong>{customer.name}</strong>
-                      <span style={styles.badgeOrange}>
-                        {rewardGoal - (customer.points % rewardGoal || rewardGoal)} point(s)
-                      </span>
-                    </div>
-                    <button style={styles.buttonWhatsapp} onClick={() => openWhatsApp(customer)}>
-                      Relancer via WhatsApp
-                    </button>
-                  </div>
-                ))}
-              </div>
-
-              <div style={styles.card}>
-                <h3 style={styles.cardTitle}>⏳ Clients inactifs</h3>
-                {inactiveClients.length === 0 && <p style={styles.muted}>Aucun client inactif</p>}
-                {inactiveClients.map((customer) => (
-                  <div key={customer.id} style={styles.promoCard}>
-                    <div style={styles.rowBetween}>
-                      <strong>{customer.name}</strong>
-                      <span style={styles.badge}>Inactif</span>
-                    </div>
-                    <button style={styles.buttonWhatsapp} onClick={() => openWhatsApp(customer)}>
-                      Relancer client inactif
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </>
-        )}
+  <DashboardSection
+    clients={customers}
+    promotions={promotions}
+    bookings={bookings}
+    businessId={currentUser.businessId}
+  />
+)}
 
         {activeTab === "clients" && (
           <div style={styles.card}>

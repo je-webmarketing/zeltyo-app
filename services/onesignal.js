@@ -1,4 +1,17 @@
-export async function sendPush({ title, message, externalIds }) {
+function clean(value) {
+  return String(value || "").trim();
+}
+
+function hasOneSignalConfig() {
+  return Boolean(process.env.ONESIGNAL_APP_ID && process.env.ONESIGNAL_API_KEY);
+}
+
+async function callOneSignal(payload) {
+  if (!hasOneSignalConfig()) {
+    console.warn("OneSignal non configuré");
+    return { ok: false, error: "OneSignal non configuré" };
+  }
+
   try {
     const response = await fetch("https://api.onesignal.com/notifications?c=push", {
       method: "POST",
@@ -9,56 +22,118 @@ export async function sendPush({ title, message, externalIds }) {
       body: JSON.stringify({
         app_id: process.env.ONESIGNAL_APP_ID,
         target_channel: "push",
-        include_aliases: {
-          external_id: externalIds,
-        },
-        headings: { fr: title, en: title },
-        contents: { fr: message, en: message },
+        ...payload,
       }),
     });
 
-    const data = await response.json();
+    let data = {};
 
-    console.log("sendPush → status:", response.status);
-    console.log("sendPush → response:", JSON.stringify(data, null, 2));
+    try {
+      data = await response.json();
+    } catch {
+      data = {};
+    }
 
-    return { ok: response.ok, status: response.status, data };
+    if (!response.ok) {
+      console.error("Erreur OneSignal :", response.status, data);
+    }
+
+    return {
+      ok: response.ok,
+      status: response.status,
+      data,
+    };
   } catch (err) {
-    console.error("Erreur sendPush :", err);
-    return { ok: false, error: err.message };
+    console.error("Erreur appel OneSignal :", err);
+    return {
+      ok: false,
+      error: err.message,
+    };
   }
 }
 
-export async function sendNotificationToSubscription(subscriptionId, message) {
-  try {
-    const response = await fetch("https://api.onesignal.com/notifications?c=push", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Key ${process.env.ONESIGNAL_API_KEY}`,
-      },
-      body: JSON.stringify({
-        app_id: process.env.ONESIGNAL_APP_ID,
-        target_channel: "push",
-        include_subscription_ids: [subscriptionId],
-        headings: { fr: "Zeltyo", en: "Zeltyo" },
-        contents: { fr: message, en: message },
-      }),
-    });
+export function buildClientExternalId(businessId, clientId) {
+  const cleanBusinessId = clean(businessId);
+  const cleanClientId = clean(clientId);
 
-    const data = await response.json();
+  if (!cleanBusinessId || !cleanClientId) return "";
 
-    console.log("sendNotificationToSubscription → status:", response.status);
-    console.log(
-      "sendNotificationToSubscription → response:",
-      JSON.stringify(data, null, 2)
-    );
+  return `${cleanBusinessId}_${cleanClientId}`;
+}
 
-    return { ok: response.ok, status: response.status, data };
-  } catch (err) {
-    console.error("Erreur sendNotificationToSubscription :", err);
-    return { ok: false, error: err.message };
+export async function sendPush({ title, message, externalIds = [] }) {
+  const validExternalIds = Array.isArray(externalIds)
+    ? externalIds.map(clean).filter(Boolean)
+    : [];
+
+  if (validExternalIds.length === 0) {
+    return {
+      ok: false,
+      error: "Aucun externalId fourni",
+    };
   }
+
+  return callOneSignal({
+    include_aliases: {
+      external_id: validExternalIds,
+    },
+    headings: {
+      fr: title || "Zeltyo",
+      en: title || "Zeltyo",
+    },
+    contents: {
+      fr: message || "",
+      en: message || "",
+    },
+  });
+}
+
+export async function sendPushToBusinessClients({
+  title,
+  message,
+  businessId,
+  clients = [],
+}) {
+  const externalIds = clients
+    .filter((client) => clean(client.businessId) === clean(businessId))
+    .map((client) => buildClientExternalId(businessId, client.id || client.loyaltyId))
+    .filter(Boolean);
+
+  if (externalIds.length === 0) {
+    return {
+      ok: false,
+      error: "Aucun client ciblable pour ce commerce",
+    };
+  }
+
+  return sendPush({
+    title,
+    message,
+    externalIds,
+  });
+}
+
+export async function sendNotificationToSubscription(subscriptionId, message) {
+  const cleanSubscriptionId = clean(subscriptionId);
+
+  if (!cleanSubscriptionId) {
+    return {
+      ok: false,
+      error: "subscriptionId manquant",
+    };
+  }
+
+  return callOneSignal({
+    include_subscription_ids: [cleanSubscriptionId],
+    headings: {
+      fr: "Zeltyo",
+      en: "Zeltyo",
+    },
+    contents: {
+      fr: message || "",
+      en: message || "",
+    },
+  });
 }
 
 export const sendPushNotification = sendPush;

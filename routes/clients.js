@@ -4,7 +4,7 @@ import {
   getAllClients,
   upsertClient,
   refreshClientSegments,
-  saveAllClients,
+  rewardClientVisit,
 } from "../services/clientStore.js";
 import { sendNotificationToSubscription } from "../services/onesignal.js";
 import { requireAuth, requireRole } from "../middleware/requireAuth.js";
@@ -49,9 +49,7 @@ function sameBusiness(client, businessId) {
 
 function filterClientsByBusiness(clients, req) {
   const businessId = getUserBusinessId(req);
-
   if (!businessId) return [];
-
   return clients.filter((client) => sameBusiness(client, businessId));
 }
 
@@ -64,10 +62,7 @@ router.get(
       const allClients = await getAllClients();
       const clients = filterClientsByBusiness(allClients, req);
 
-      return res.json({
-        ok: true,
-        clients,
-      });
+      return res.json({ ok: true, clients });
     } catch (error) {
       console.error("Erreur GET /clients :", error);
       return res.status(500).json({
@@ -89,16 +84,12 @@ router.get("/by-loyalty/:value", async (req, res) => {
   try {
     const value = clean(req.params.value);
     const businessId = clean(req.query.businessId);
-
     const clients = await getAllClients();
 
     const client = clients.find((c) => {
       const matchIdentity = c.loyaltyId === value || c.id === value;
-
       if (!matchIdentity) return false;
-
       if (!businessId) return true;
-
       return sameBusiness(c, businessId);
     });
 
@@ -109,10 +100,7 @@ router.get("/by-loyalty/:value", async (req, res) => {
       });
     }
 
-    return res.json({
-      ok: true,
-      client,
-    });
+    return res.json({ ok: true, client });
   } catch (error) {
     console.error("Erreur GET /clients/by-loyalty/:value :", error);
     return res.status(500).json({
@@ -208,15 +196,18 @@ router.post("/", async (req, res) => {
 router.post("/register-subscription", async (req, res) => {
   try {
     const id = clean(req.body.id);
+    const loyaltyId = clean(req.body.loyaltyId);
     const name = clean(req.body.name);
     const phone = cleanPhone(req.body.phone);
+    const email = cleanEmail(req.body.email);
     const subscriptionId = clean(req.body.subscriptionId);
+    const externalId = clean(req.body.externalId);
     const businessId = getBodyBusinessId(req);
 
-    if (!subscriptionId || (!id && !phone)) {
+    if (!subscriptionId || (!id && !phone && !loyaltyId)) {
       return res.status(400).json({
         ok: false,
-        error: "subscriptionId + id ou phone obligatoire",
+        error: "subscriptionId + id, loyaltyId ou phone obligatoire",
       });
     }
 
@@ -227,21 +218,22 @@ router.post("/register-subscription", async (req, res) => {
       });
     }
 
-    const clients = await upsertClient({
+    const client = await upsertClient({
       id,
+      loyaltyId,
       name,
       phone,
+      email,
       businessId,
       subscriptionId,
+      externalId,
       updatedAt: new Date().toISOString(),
     });
 
     return res.json({
       ok: true,
       message: "Client enregistré",
-      clients: Array.isArray(clients)
-        ? clients.filter((client) => sameBusiness(client, businessId))
-        : clients,
+      client,
     });
   } catch (error) {
     console.error("Erreur POST /clients/register-subscription :", error);
@@ -261,10 +253,7 @@ router.get(
       const refreshed = await refreshClientSegments();
       const clients = filterClientsByBusiness(refreshed, req);
 
-      return res.json({
-        ok: true,
-        clients,
-      });
+      return res.json({ ok: true, clients });
     } catch (error) {
       console.error("Erreur GET /clients/segments :", error);
       return res.status(500).json({
@@ -308,100 +297,92 @@ router.post(
         });
       }
 
-      const clients = await getAllClients();
+      let loyaltyId = id;
 
-      const index = clients.findIndex((c) => {
-        const sameIdentity = c.id === id || (phone && cleanPhone(c.phone) === phone);
-        return sameIdentity && sameBusiness(c, businessId);
-      });
+      if (phone) {
+        const clients = await getAllClients();
+        const phoneClient = clients.find(
+          (client) => cleanPhone(client.phone) === phone && sameBusiness(client, businessId)
+        );
 
-      if (index === -1) {
-        return res.status(404).json({
-          ok: false,
-          error: "Client introuvable pour ce commerce",
-        });
+        if (!phoneClient) {
+          return res.status(404).json({
+            ok: false,
+            error: "Client introuvable pour ce commerce",
+          });
+        }
+
+        loyaltyId = phoneClient.loyaltyId || phoneClient.id;
       }
 
-      clients[index] = {
-        ...clients[index],
+      const updatedClient = await rewardClientVisit({
+        loyaltyId,
         businessId,
-        visits: Number(clients[index].visits ?? 0) + 1,
-        points: Number(clients[index].points ?? 0) + points,
-        totalSpent:
-          Number(clients[index].totalSpent ?? 0) +
-          (Number.isFinite(amount) ? amount : 0),
-        lastVisitAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-
-      await saveAllClients(clients);
+        points,
+        amount,
+      });
 
       const refreshed = await refreshClientSegments();
 
-      const updatedClient = refreshed.find((c) => {
-        const sameIdentity = c.id === id || (phone && cleanPhone(c.phone) === phone);
-        return sameIdentity && sameBusiness(c, businessId);
-      });
+      const refreshedClient =
+        refreshed.find(
+          (client) =>
+            sameBusiness(client, businessId) &&
+            (client.id === updatedClient.id ||
+              client.loyaltyId === updatedClient.loyaltyId)
+        ) || updatedClient;
 
-      if (updatedClient?.subscriptionId) {
+      if (refreshedClient?.subscriptionId) {
         let message = null;
 
         if (
-          Number(updatedClient.points || 0) >= Number(updatedClient.rewardGoal ?? 10) &&
-          !updatedClient.rewardNotified
+          Number(refreshedClient.points || 0) >=
+            Number(refreshedClient.rewardGoal ?? 10) &&
+          !refreshedClient.rewardNotified
         ) {
           message = "Votre récompense est prête 🎁 Présentez-vous pour en profiter.";
-          updatedClient.rewardNotified = true;
 
-          const allClients = await getAllClients();
-
-          const updatedIndex = allClients.findIndex(
-            (c) => c.id === updatedClient.id && sameBusiness(c, businessId)
-          );
-
-          if (updatedIndex !== -1) {
-            allClients[updatedIndex] = {
-              ...allClients[updatedIndex],
-              rewardNotified: true,
-              updatedAt: new Date().toISOString(),
-            };
-
-            await saveAllClients(allClients);
-          }
-        } else if (updatedClient.segment === "loyal") {
+          await upsertClient({
+            ...refreshedClient,
+            rewardNotified: true,
+            updatedAt: new Date().toISOString(),
+          });
+        } else if (refreshedClient.segment === "loyal") {
           message =
             "Merci pour votre fidélité 🙌 Encore quelques visites et une surprise vous attend.";
-        } else if (updatedClient.segment === "vip") {
+        } else if (refreshedClient.segment === "vip") {
           message =
             "Vous faites partie de nos meilleurs clients ⭐ Un bonus VIP vous attend.";
         }
 
         if (message) {
-          await sendNotificationToSubscription(updatedClient.subscriptionId, message);
+          await sendNotificationToSubscription(refreshedClient.subscriptionId, message);
         }
       }
 
       const finalClients = await getAllClients();
-
       const businessClients = finalClients.filter((client) =>
         sameBusiness(client, businessId)
       );
 
-      const finalClient = businessClients.find(
-        (c) => c.id === id || (phone && cleanPhone(c.phone) === phone)
-      );
+      const finalClient =
+        businessClients.find(
+          (client) =>
+            client.id === refreshedClient.id ||
+            client.loyaltyId === refreshedClient.loyaltyId
+        ) || refreshedClient;
 
       return res.json({
         ok: true,
         message: "Visite enregistrée",
-        client: finalClient || null,
+        client: finalClient,
         clients: businessClients,
       });
     } catch (error) {
       console.error("Erreur POST /clients/visit :", error);
       return res.status(500).json({
         ok: false,
-        error: "Erreur enregistrement visite",
+        error: error.message || "Erreur enregistrement visite",
       });
     }
   }

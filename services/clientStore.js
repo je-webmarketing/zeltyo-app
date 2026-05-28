@@ -173,9 +173,46 @@ const existing = clients.find((client) => {
   return merged;
 }
 
+export async function rewardClientVisit({
+  loyaltyId,
+  businessId,
+  points = 1,
+  amount = 0,
+}) {
+  const clients = await getAllClients();
+
+  const client = clients.find(
+    (item) =>
+      String(item.loyaltyId || "") === String(loyaltyId || "") &&
+      String(item.businessId || "") === String(businessId || "")
+  );
+
+  if (!client) {
+    throw new Error("Client introuvable");
+  }
+
+  const rewardGoal = Number(client.rewardGoal || 10);
+
+  const updated = enrichClient({
+    ...client,
+    visits: Number(client.visits || 0) + 1,
+    points: Number(client.points || 0) + Number(points || 1),
+    totalSpent:
+      Number(client.totalSpent || 0) + Number(amount || 0),
+    lastVisitAt: new Date().toISOString(),
+    rewardNotified: false,
+    rewardGoal,
+  });
+
+  await upsertClient(updated);
+
+  return updated;
+}
+
 export async function refreshClientSegments() {
   const clients = await getAllClients();
   const refreshed = clients.map(enrichClient);
   await saveAllClients(refreshed);
   return refreshed;
 }
+
