@@ -17,6 +17,7 @@ import menuRouter from "./routes/menu.js";
 import stripeRoutes from "./routes/stripe.js";
 import promotionsRouter from "./routes/promotions.js";
 import businessesRouter from "./routes/businesses.js";
+import businessContentRoutes from "./routes/businessContent.js";
 
 dotenv.config();
 
@@ -121,6 +122,7 @@ app.use("/menu", menuRouter);
 app.use("/automation-segmented", automationSegmentedRouter);
 app.use("/stripe", stripeRoutes);
 app.use("/promotions", promotionsRouter);
+app.use("/business-content", businessContentRoutes);
 
 if (!isProd) {
   app.get("/test-push", async (req, res) => {
