@@ -43,6 +43,26 @@ function fromDb(row) {
   };
 }
 
+router.get("/", async (req, res) => {
+  const { data, error } = await supabase
+    .from("businesses")
+    .select("*")
+    .order("updated_at", { ascending: false });
+
+  if (error) {
+    console.error("Erreur chargement businesses :", error);
+    return res.status(500).json({
+      ok: false,
+      error: "Erreur chargement commerces",
+    });
+  }
+
+  return res.json({
+    ok: true,
+    businesses: Array.isArray(data) ? data.map(fromDb) : [],
+  });
+});
+
 router.get("/:businessId", async (req, res) => {
   const { businessId } = req.params;
 
