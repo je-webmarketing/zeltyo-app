@@ -389,6 +389,96 @@ router.post(
 );
 
 router.post(
+  "/use-reward",
+  requireAuth,
+  requireRole("admin", "merchant_admin", "merchant_employee", "employee"),
+  async (req, res) => {
+    try {
+      const id = clean(req.body.id || req.body.loyaltyId);
+      const rewardGoal = Number(req.body.rewardGoal || 10);
+      const businessId = getUserBusinessId(req);
+
+      if (!businessId) {
+        return res.status(400).json({
+          ok: false,
+          error: "businessId manquant",
+        });
+      }
+
+      if (!id) {
+        return res.status(400).json({
+          ok: false,
+          error: "Client obligatoire",
+        });
+      }
+
+      const clients = await getAllClients();
+
+      const client = clients.find(
+        (c) =>
+          sameBusiness(c, businessId) &&
+          (String(c.id) === String(id) ||
+            String(c.loyaltyId) === String(id))
+      );
+
+      if (!client) {
+        return res.status(404).json({
+          ok: false,
+          error: "Client introuvable",
+        });
+      }
+
+      const currentPoints = Number(client.points || 0);
+
+      if (currentPoints < rewardGoal) {
+        return res.status(400).json({
+          ok: false,
+          error: "Récompense non disponible",
+        });
+      }
+
+      const nextPoints = Math.max(0, currentPoints - rewardGoal);
+
+      const updatedClient = await upsertClient({
+        ...client,
+        points: nextPoints,
+        rewardsAvailable: Math.floor(nextPoints / rewardGoal),
+        rewardsUsed: Number(client.rewardsUsed || 0) + 1,
+        rewardNotified: false,
+        lastRewardUsedAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      });
+
+      const refreshed = await refreshClientSegments();
+
+      const businessClients = refreshed.filter((c) =>
+        sameBusiness(c, businessId)
+      );
+
+      const finalClient =
+        businessClients.find(
+          (c) =>
+            c.id === updatedClient.id ||
+            c.loyaltyId === updatedClient.loyaltyId
+        ) || updatedClient;
+
+      return res.json({
+        ok: true,
+        message: "Récompense utilisée",
+        client: finalClient,
+        clients: businessClients,
+      });
+    } catch (error) {
+      console.error("Erreur POST /clients/use-reward :", error);
+      return res.status(500).json({
+        ok: false,
+        error: error.message || "Erreur utilisation récompense",
+      });
+    }
+  }
+);
+
+router.post(
   "/relaunch",
   requireAuth,
   requireRole("admin", "merchant_admin"),
