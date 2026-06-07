@@ -86,12 +86,18 @@ router.get("/by-loyalty/:value", async (req, res) => {
     const businessId = clean(req.query.businessId);
     const clients = await getAllClients();
 
-    const client = clients.find((c) => {
-      const matchIdentity = c.loyaltyId === value || c.id === value;
-      if (!matchIdentity) return false;
-      if (!businessId) return true;
-      return sameBusiness(c, businessId);
-    });
+   const client = clients.find((c) => {
+  const matchIdentity =
+    String(c.loyaltyId || "") === value ||
+    String(c.id || "") === value ||
+    cleanPhone(c.phone) === cleanPhone(value);
+
+  if (!matchIdentity) return false;
+
+  if (!businessId) return true;
+
+  return sameBusiness(c, businessId);
+});
 
     if (!client) {
       return res.status(404).json({
