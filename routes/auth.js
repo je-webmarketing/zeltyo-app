@@ -2,6 +2,9 @@ import express from "express";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { requireAuth } from "../middleware/requireAuth.js";
+import { sendResetPasswordEmail } from "../services/email.js";
+
+console.log("✅ AUTH ROUTES VERSION SMTP_01 CHARGÉE");
 
 const router = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET || "change-me-in-production";
@@ -146,30 +149,70 @@ router.get("/merchant-me", requireAuth, (req, res) => {
   });
 });
 
-router.post("/forgot-password", (req, res) => {
-  const { email } = req.body;
+router.post("/forgot-password", async (req, res) => {
+  console.log("FORGOT PASSWORD ROUTE HIT", {
+  origin: req.headers.origin,
+  email: req.body?.email,
+});
 
-  const user = merchantUsers.find(
-    (u) => u.email.toLowerCase() === String(email).toLowerCase()
-  );
+  try {
+    const email = String(req.body?.email || "").trim().toLowerCase();
 
-  if (!user) {
-    return res.json({ ok: true }); // sécurité (on ne dit pas si email existe)
+    if (!email) {
+      return res.status(400).json({
+        ok: false,
+        error: "Email requis",
+      });
+    }
+
+    const user = merchantUsers.find(
+      (item) => String(item.email || "").toLowerCase() === email
+    );
+
+    // Réponse neutre : ne révèle pas si le compte existe
+    if (!user) {
+      return res.json({
+        ok: true,
+        message:
+          "Si un compte existe avec cet email, un lien de réinitialisation a été envoyé.",
+      });
+    }
+
+    const resetToken = jwt.sign(
+      {
+        id: user.id,
+        email: user.email,
+        purpose: "password_reset",
+      },
+      JWT_SECRET,
+      { expiresIn: "30m" }
+    );
+
+    const resetUrl = `${process.env.MERCHANT_RESET_URL}?token=${resetToken}`;
+
+    console.log("✅ BEFORE SMTP SEND", {
+  to: user.email,
+  resetUrl,
+});
+
+    await sendResetPasswordEmail({
+      to: user.email,
+      resetUrl,
+    });
+
+    return res.json({
+      ok: true,
+      message:
+        "Si un compte existe avec cet email, un lien de réinitialisation a été envoyé.",
+    });
+  } catch (error) {
+    console.error("forgot-password error:", error);
+
+    return res.status(500).json({
+      ok: false,
+      error: "Erreur lors de l'envoi de l'email de réinitialisation",
+    });
   }
-
-  const resetToken = jwt.sign(
-    { id: user.id },
-    JWT_SECRET,
-    { expiresIn: "15m" }
-  );
-
-  console.log("🔑 RESET TOKEN:", resetToken);
-
-  return res.json({
-    ok: true,
-    message: "Lien de réinitialisation généré",
-   resetToken 
-  });
 });
 
 router.post("/reset-password", async (req, res) => {
