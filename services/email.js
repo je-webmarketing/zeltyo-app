@@ -35,6 +35,8 @@ export async function sendResetPasswordEmail({ to, resetUrl }) {
   hasPass: Boolean(process.env.SMTP_PASS),
 });
 
+console.log("SMTP PASSWORD LENGTH =", process.env.SMTP_PASS?.length);
+
   await transporter.verify();
 
   const info = await transporter.sendMail({
