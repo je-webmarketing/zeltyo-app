@@ -69,6 +69,15 @@ const merchantUsers = [
   name: "Istanbul Kebab Employé",
   isActive: true,
 },
+{
+  id: "user_test_eric",
+  email: "ericjarry34@gmail.com",
+  passwordHash: bcrypt.hashSync("Temp2026!", 10),
+  role: "merchant_admin",
+  businessId: "BUS-ISTANBUL",
+  name: "Test Eric",
+  isActive: true,
+},
 ];
 
 router.post("/merchant-login", async (req, res) => {
